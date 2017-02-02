@@ -1,5 +1,6 @@
 #include "MSExcelWorks.h"
 
+using namespace tasktools;
 //----------------------------------------------------------------------------
 // Сохраняет книгу в файл
 void __fastcall MSExcelWorks::SaveDocument(Variant& workbook, const AnsiString& FileName)
@@ -579,14 +580,21 @@ std::vector<AnsiString> __fastcall MSExcelWorks::GetDataFormat(const Variant &Ar
 
         // устанавливаем формат числа для ячейки
         if ( IsDate(s.c_str()) )
+        {
             format = "ДД.ММ.ГГГГ"; //"m/d/yyyy";    //"ДД.ММ.ГГГГ";
+        }
         else if ( IsFloat(s.c_str()) )
+        {
             format = "0.00";
+        }
         else if ( IsInt(s.c_str()) )   // Убираем, так как лицевые счета могут начинать на 0
+        {
              format = "0";
+        }
         else
+        {
             format = "@";   // "General"
-
+        }
         formats.push_back(format);
     }
     return formats;

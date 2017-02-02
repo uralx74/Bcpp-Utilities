@@ -1,7 +1,7 @@
 #include "MSWordWorks.h"
-#include "JsonObject.h"
 #include <cassert>
 
+using namespace tasktools;
 //---------------------------------------------------------------------------
 //
 MergeTable::MergeTable()
@@ -58,8 +58,9 @@ void __fastcall MergeTable::PutRecord(const AnsiString &Value, int RecordIndex, 
     data.PutElement(Value, RecordIndex, FieldIndex);
 
     if (RecCount < CurrentRecordIndex)
+    {
         RecCount = CurrentRecordIndex;  // Возможно стоит сделать иначе для использования готовых массивов данных
-
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -109,7 +110,6 @@ void __fastcall MSWordWorks::SetDisplayAlerts(bool flg)
 // Отрыть документ Word
 Variant __fastcall MSWordWorks::OpenWord()
 {
-    Variant Document;
 	try
     {
         // Создание объекта Word.Application
@@ -136,7 +136,9 @@ Variant __fastcall MSWordWorks::OpenWord()
         WordApp.OlePropertySet("Visible", false);
 
         // Инициализация ссылки на документы
-	  	Documents = WordApp.OlePropertyGet("Documents");
+	  	_documents = WordApp.OlePropertyGet("Documents");
+
+        return WordApp;
     }
     catch (Exception &e)
     {
@@ -233,13 +235,13 @@ Variant __fastcall MSWordWorks::OpenDocument(const String &DocumentFileName, boo
     if ( fAsTemplate )
     {
         // Открывается существующий документ
-    	document = Documents.OleFunction("Open", DocumentFileName);
+    	document = _documents.OleFunction("Open", DocumentFileName);
     }
     else
     {
         // Создается новый документ, если открываемый документ - шаблон
     	// Каждый вновь создаваемый документ получает индекс Item = 1
-    	document = Documents.OleFunction("Add", DocumentFileName.c_str(), false, 0);
+    	document = _documents.OleFunction("Add", DocumentFileName.c_str(), false, 0);
     }
     return document;
 }
@@ -300,16 +302,17 @@ void __fastcall MSWordWorks::SetTextToBookmark(Variant Document, String Bookmark
 
 //---------------------------------------------------------------------------
 // Вставка изображения в закладку (текст заменяется изображением)
-bool MSWordWorks::SetPictureToBookmark(Variant Document, String BookmarkName, String PictureFileName, int Width, int Height)
+Variant MSWordWorks::SetPictureToBookmark(Variant Document, String BookmarkName, String PictureFileName, int Width, int Height)
 {
     Variant Bookmarks=Document.OlePropertyGet("Bookmarks");
     Variant Bookmark = Bookmarks.OleFunction("Item", (OleVariant)BookmarkName);
-    Bookmark.OlePropertyGet("Range").OlePropertyGet("InlineShapes").OleProcedure("AddPicture", PictureFileName, false, true);
+    Variant picture = Bookmark.OlePropertyGet("Range").OlePropertyGet("InlineShapes").OleFunction("AddPicture", PictureFileName, false, true);
 
     // Не проверено!
     Bookmark.OleProcedure("Delete");
 
 
+    return picture;
     //vBookmark.OlePropertyGet("Range").OlePropertySet("Text","12");
     /*// Выбор Bookmark по имени
     Variant Bookmark = Bookmarks.OleFunction("Item", (OleVariant)BookmarkName);
@@ -392,7 +395,7 @@ void __fastcall MSWordWorks::SetTextToField(Variant Document, String FieldName, 
         }
     }
 
-    if (!Field.IsEmpty())
+    if ( !Field.IsEmpty() )
     {
         Field.OlePropertyGet("Range").OlePropertySet("Text", Text);
     }
@@ -414,7 +417,7 @@ void __fastcall MSWordWorks::SetTextToField(Variant Document, String FieldName, 
    4 - перед текстом
    5 - за текстом
 */
-Variant __fastcall MSWordWorks::ConverInlineShapeToShape(Variant inlineShape, int zOrder)
+void __fastcall MSWordWorks::ConverInlineShapeToShape(Variant inlineShape, int zOrder)
 {
     // Конвертируем в Shape
     Variant shape = inlineShape.OleFunction("ConvertToShape");
@@ -450,6 +453,7 @@ Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, Variant Fiel
     {
         Variant InlineShapes = Field.OlePropertyGet("Range").OlePropertyGet("InlineShapes");
         Variant InlineShape = InlineShapes.OleFunction("AddPicture", PictureFileName.c_str(), false, true);
+        // OleFunction("AddPictureBullet", "test.bmp");
 
         // Не проверено!
         Field.OleProcedure("Delete");
@@ -474,7 +478,7 @@ Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, Variant Fiel
 Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, int fieldIndex, String PictureFileName, int Width, int Height)
 {
     Variant Field = Document.OlePropertyGet("FormFields").OleFunction("Item", fieldIndex);
-    SetPictureToField(Document, Field, PictureFileName, Width, Height);
+    return SetPictureToField(Document, Field, PictureFileName, Width, Height);
 }
 
 //---------------------------------------------------------------------------
@@ -482,7 +486,7 @@ Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, int fieldInd
 Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, String FieldName, String PictureFileName, int Width, int Height)
 {
     Variant Field = Document.OlePropertyGet("FormFields").OleFunction("Item", (OleVariant)FieldName);
-    SetPictureToField(Document, Field, PictureFileName, Width, Height);
+    return SetPictureToField(Document, Field, PictureFileName, Width, Height);
 }
 
 //---------------------------------------------------------------------------
@@ -587,7 +591,7 @@ Variant MSWordWorks::CreateTable(Variant Document, int nCols, int nRows)
 {
     Variant range = Document.OleFunction("Range");
 	// Создане таблицы в области Range
-    Document.OlePropertyGet("Tables").OleProcedure("Add", range, (OleVariant) nCols, (OleVariant) nRows);
+    return Document.OlePropertyGet("Tables").OleFunction("Add", range, (OleVariant) nCols, (OleVariant) nRows);
 
 	// Выбор существующей таблицы
 	//Table = Tables.OleFunction("Item", 1);
@@ -658,7 +662,7 @@ void __fastcall MSWordWorks::CloseApplication()
     if (!WordApp.IsEmpty())
     {
         Variant document;
-        while (Documents.OlePropertyGet("Count") > 0)
+        while (_documents.OlePropertyGet("Count") > 0)
         {
             document = WordApp.OlePropertyGet("ActiveDocument");
             document.OleFunction("Close", false);
@@ -673,7 +677,7 @@ void __fastcall MSWordWorks::CloseDocument(Variant Document, bool fCloseAppIfNoD
 {
 	Document.OleFunction("Close", false);
 
-    if (fCloseAppIfNoDoc && Documents.OlePropertyGet("Count") == 0)
+    if (fCloseAppIfNoDoc && _documents.OlePropertyGet("Count") == 0)
     {
         CloseApplication();
     }
@@ -747,7 +751,7 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, MERGETAB
 
     TmpFileName = GetTempPath() + TmpFileName;
 
-    int ArrayRowsCount = md.RecCount;
+    //int ArrayRowsCount = md.RecCount;
 
     //int ArrayRowsCount = VarArrayHighBound(ArrayData.data, 1) - VarArrayLowBound(ArrayData.data, 1)+1;
     //int ArrayColsCount = VarArrayHighBound(md.data, 2) - VarArrayLowBound(md.data, 2)+1;
@@ -1118,14 +1122,15 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* QTable, Variant Do
         for (int i = 1; i <= FieldCount; i++)
         {
             Variant vField = vFields.OleFunction("Item", i);
-            Variant vCode = vField.OlePropertyGet("Code");
+            String fieldName = getFieldName(vField, 59);
+            /*Variant vCode = vField.OlePropertyGet("Code");
 
             // Возможно следует доработать, так как ниже используется костыль
             // Получаем код поля и выделяем из него Имя поля
             // Mergefield имя опции
             String Text = vCode.OlePropertyGet("Text");
             Text = Text.Trim();
-            AnsiString sepMergeField = "MERGEFIELD ";
+            String sepMergeField = "MERGEFIELD ";
             int SepPos = Text.Pos(sepMergeField) + sepMergeField.Length()-1;
             String FieldName = Text.SubString(SepPos+1, Text.Length()-SepPos).Trim();
             SepPos = FieldName.Pos(" ");
@@ -1133,10 +1138,10 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* QTable, Variant Do
             {
                 SepPos = FieldName.Length();
             }
-            FieldName = FieldName.SubString(1,SepPos).Trim();
+            FieldName = FieldName.SubString(1,SepPos).Trim();*/
 
             // Удаляем поля MergeField из документа, если аналогичного поля нет в источнике
-            if (QTable->FindField(FieldName) == NULL)
+            if (QTable->FindField(fieldName) == NULL)
             {
                 //vCode.OlePropertySet("Text", "проверка");     // Работает, но удаляет поле
                 //vField.OleProcedure("Delete");                // Работает, но удаляет поле
@@ -1150,7 +1155,7 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* QTable, Variant Do
                 Variant vSelection = WordApp.OlePropertyGet("Selection");
                 Variant vrange = vSelection.OlePropertyGet("Range");
                 //vSelection.OleProcedure("TypeText","hello");
-                vrange.OlePropertySet("Text", ("NA_" + FieldName).c_str());
+                vrange.OlePropertySet("Text", ("NA_" + fieldName).c_str());
                 vrange.OlePropertySet("HighlightColorIndex", 7); // wdYellow = 7 ;
 
                 // Необходимо учитывать что
@@ -1161,7 +1166,7 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* QTable, Variant Do
             }
             else
             {
-                mergetable.AddField(i, FieldName);
+                mergetable.AddField(i, fieldName);
             }  
         }
 
@@ -1220,32 +1225,33 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
     {
         Variant formFieldsItem = FormFields.OleFunction("Item", i);
         String fieldNameCode = UpperCase(formFieldsItem.OlePropertyGet("Result"));
-        String fieldName = "";
+        String fieldName;
+
         bool isImg = false;
+        int imgParam_zOrder;
 
-
-        // Текст по умолчанию из поля анализируем как json
-        //String str = "\"img\":{\"name\"=\"visa\",\"zorder\"=5, \"width\"=\"100\", \"height\" = \"50\"}";
-
-        TJsonObject json(fieldNameCode);
-        json.parse();
-        TJsonNode* rootNode = json.getRootNode();
-        TJsonNode* imgSubNode = NULL;
-        if (rootNode != NULL)
+        if (fieldNameCode.Pos("[IMG]") == 1)
         {
-            imgSubNode = rootNode->getSubNode("img");
+            isImg = true;
+            imgParam_zOrder = 4;
+        }
+        else if (fieldNameCode.Pos("[SHAPE]") == 1)
+        {
+            isImg = true;
+            imgParam_zOrder = 5;
         }
 
-
-        if (imgSubNode != NULL)
+        if ( isImg )
         {
-            Variant s = imgSubNode->getParam("zorder", 0);
-            isImg = true;
+            int posClosingBracket = fieldNameCode.Pos("]");
+            fieldName = fieldNameCode.SubString(posClosingBracket + 1, fieldNameCode.Length() - posClosingBracket);
+
         }
         else
         {
             fieldName = fieldNameCode;
         }
+
 
         TField* Field = dataSet->Fields->FindField(fieldName);
         if (Field != NULL) // Если нашли поле
@@ -1255,7 +1261,12 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
                 String imgPath = Field->AsString;
                 if ( FileExists(imgPath) )
                 {
-                    SetPictureToField(Document, i, imgPath);
+                    Variant inlineShape = SetPictureToField(Document, i, imgPath);
+
+                    if (imgParam_zOrder == 5)
+                    {
+                        ConverInlineShapeToShape(inlineShape, imgParam_zOrder);
+                    }
                 }
                 else
                 {
@@ -1270,6 +1281,168 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
     }
 }
 
+/* Вычисляет имя поля указанного типа */
+String MSWordWorks::getFieldName(Variant field, int fieldType)
+{
+    int type = field.OlePropertyGet("Type");
+
+    if (fieldType != 0 && type != fieldType)
+    {
+        return String("");
+    }
+
+    // Определяем кодовое имя поля по числовому коду типа поля
+    String fieldDescr = "";
+    switch(type)
+    {
+    case 64:   // wdFieldDocVariable
+    {
+        fieldDescr = "DOCVARIABLE";
+        break;
+    }
+    case 59:    // wdFieldMergeField
+    {
+        fieldDescr = "DOCVARIABLE";
+        break;
+    }
+    default:
+    {
+        return String("");
+    }
+    }
+
+    Variant code = field.OlePropertyGet("Code");   // code is a range of field text
+    String text = code.OlePropertyGet("Text");
+
+    int p1 = 0;
+    int p2 = 0;
+
+    // Определяем позицию начала имени
+    if ( fieldDescr != "")
+    {
+        p1 = text.Pos(fieldDescr) + fieldDescr.Length() + 1;
+
+        for (int i = p1; i < text.Length(); i++)
+        {
+            if ( text[i] == ' ' )
+            {
+                p1++;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+    else
+    {
+        return String("");
+    }
+    // Определяем позицию конца имени
+    for (int i = p1; i <text.Length(); i++)
+    {
+        if ( text[i] == ' ' )
+        {
+            p2 = i;
+            break;
+        }
+    }
+    return text.SubString(p1, p2 - p1);
+}
+
+/* Возвращает список для привязки полей из dataSet к table
+*/
+std::vector<TLinkFields> MSWordWorks::assignDataSetToTableFields(Variant table, TDataSet* dataSet)
+{
+    std::vector<TLinkFields> result;
+    result.reserve(dataSet->FieldCount);
+
+    Variant fields = table.OlePropertyGet("Range").OlePropertyGet("Fields");
+
+    int n = fields.OlePropertyGet("Count");
+
+    for (int i = 1; i <= n; i++ )         // цикл по полям в строке
+    {
+        Variant field = fields.OleFunction("Item", i);
+        String fieldName = getFieldName(field, 64);
+        if (fieldName != "")
+        {
+            // Сопоставляем поле с полем в источнике
+            //int fieldIndex = field.OlePropertyGet("Index");   //  Это значение является сквозным значением на весь документ
+
+            TField* fieldOfDataSet = dataSet->Fields->FindField(fieldName);
+            if ( fieldOfDataSet )
+            {
+                result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
+            }
+        }
+    }
+
+
+    return result;
+}
+
+/* Выводить данные из dataSet в таблицу table
+   в таблице должны быть указаны имена полей из dataSet
+   с использованием полей DOCVARIABLE */
+void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet)
+{
+    std::vector<TLinkFields> links = assignDataSetToTableFields(table, dataSet);
+
+    if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)
+    {
+        return;
+    }
+
+    // Копируем строку таблицы с переменными в буфер обмена (плохой вариант)
+    //Variant rows = table.OlePropertyGet("Rows");
+    //Variant row = rows.OleFunction("Item", 2);
+    //Variant selection = row.OlePropertyGet("Range").OleFunction("Select");//.OlePropertyGet("Selection");//.OleFunction("Copy");
+    //selection = WordApp.OlePropertyGet("Selection");
+    //selection.OleProcedure("Copy");
+
+    // Получаем образец строки
+    Variant rows = table.OlePropertyGet("Rows");
+    Variant rowTemplate = rows.OleFunction("Item", 2);
+    Variant formatedText = rowTemplate.OlePropertyGet("Range").OlePropertyGet("FormattedText");
+
+    // Добавляем строку таблицы для позиционирования при вставке
+    // (возможно здесь можно доработать, но сойдет и так. Позже эту строку удалим)
+    Variant rowTmp = rows.OleFunction("Add");
+
+    int currentRow = 3;
+
+    while ( !dataSet->Eof ) // Цикл по dataSet
+    {
+        // Добавляем новую строку по образцу и получаем список полей
+        rowTmp.OlePropertyGet("Range").OlePropertySet("FormattedText" , formatedText );
+        Variant fields = rows.OleFunction("Item", currentRow++).OlePropertyGet("Range").OlePropertyGet("Fields");
+
+        for (std::vector<TLinkFields>::iterator it = links.begin(); it < links.end(); it++)
+        {
+            Variant field = fields.OleFunction("Item", it->second);
+            field.OlePropertyGet("Result").OlePropertySet("Text", dataSet->Fields->FieldByNumber(it->first)->AsString.c_str());
+            //field.OleProcedure("Delete");   // если нужно удалять поля, то цикл сделать в обратном порядке
+        }
+        dataSet->Next();
+
+    }
+
+    // Удаляем вспомогательную строку и строку-образец
+    rowTmp.OleProcedure("Delete");
+    rowTemplate.OleProcedure("Delete");
+}
+
+
+
+
+
+
+
+
+
+
+
 /*
 SaveAs2 аналог SaveAs. Между ними сущетсвует небольшое отличие (см. параметр CompatibilityMode)
 
@@ -1278,7 +1451,7 @@ ActiveDocument.SaveAs2 FileName
         :=True, WritePassword:="", ReadOnlyRecommended:=False, EmbedTrueTypeFonts _
         :=False, SaveNativePictureFormat:=False, SaveFormsData:=False, _
         SaveAsAOCELetter:=False, CompatibilityMode:=14
-        
+
 
 
 wdFormatDocument                    =  0
@@ -1319,4 +1492,302 @@ wdFormatMediaWiki                   = 24
 */
 
 
+/*
+WdFieldType Enumeration (Word)
 
+Office 2013 and later Other Versions 
+GitHub-Mark-64px	
+Contribute to this content
+Use GitHub to suggest and submit changes. See our guidelines for contributing to VBA documentation.
+Specifies a Microsoft Word field. Unless otherwise specified, the field types described in this enumeration can be added interactively to a Word document by using the Field dialog box. See the Word Help for more information about specific field codes.
+Name
+Value
+Description
+wdFieldAddin
+81
+Add-in field. Not available through the Field dialog box. Used to store data that is hidden from the user interface.
+wdFieldAddressBlock
+93
+AddressBlock field.
+wdFieldAdvance
+84
+Advance field.
+wdFieldAsk
+38
+Ask field.
+wdFieldAuthor
+17
+Author field.
+wdFieldAutoNum
+54
+AutoNum field.
+wdFieldAutoNumLegal
+53
+AutoNumLgl field.
+wdFieldAutoNumOutline
+52
+AutoNumOut field.
+wdFieldAutoText
+79
+AutoText field.
+wdFieldAutoTextList
+89
+AutoTextList field.
+wdFieldBarCode
+63
+BarCode field.
+wdFieldBidiOutline
+92
+BidiOutline field.
+wdFieldComments
+19
+Comments field.
+wdFieldCompare
+80
+Compare field.
+wdFieldCreateDate
+21
+CreateDate field.
+wdFieldData
+40
+Data field.
+wdFieldDatabase
+78
+Database field.
+wdFieldDate
+31
+Date field.
+wdFieldDDE
+45
+DDE field. No longer available through the Field dialog box, but supported for documents created in earlier versions of Word.
+wdFieldDDEAuto
+46
+DDEAuto field. No longer available through the Field dialog box, but supported for documents created in earlier versions of Word.
+wdFieldDisplayBarcode
+99
+DisplayBarcode field.
+wdFieldDocProperty
+85
+DocProperty field.
+wdFieldDocVariable
+64
+DocVariable field.
+wdFieldEditTime
+25
+EditTime field.
+wdFieldEmbed
+58
+Embedded field.
+wdFieldEmpty
+-1
+Empty field. Acts as a placeholder for field content that has not yet been added. A field added by pressing Ctrl+F9 in the user interface is an Empty field.
+wdFieldExpression
+34
+= (Formula) field.
+wdFieldFileName
+29
+FileName field.
+wdFieldFileSize
+69
+FileSize field.
+wdFieldFillIn
+39
+Fill-In field.
+wdFieldFootnoteRef
+5
+FootnoteRef field. Not available through the Field dialog box. Inserted programmatically or interactively.
+wdFieldFormCheckBox
+71
+FormCheckBox field.
+wdFieldFormDropDown
+83
+FormDropDown field.
+wdFieldFormTextInput
+70
+FormText field.
+wdFieldFormula
+49
+EQ (Equation) field.
+wdFieldGlossary
+47
+Glossary field. No longer supported in Word.
+wdFieldGoToButton
+50
+GoToButton field.
+wdFieldGreetingLine
+94
+GreetingLine field.
+wdFieldHTMLActiveX
+91
+HTMLActiveX field. Not currently supported.
+wdFieldHyperlink
+88
+Hyperlink field.
+wdFieldIf
+7
+If field.
+wdFieldImport
+55
+Import field. Cannot be added through the Field dialog box, but can be added interactively or through code.
+wdFieldInclude
+36
+Include field. Cannot be added through the Field dialog box, but can be added interactively or through code.
+wdFieldIncludePicture
+67
+IncludePicture field.
+wdFieldIncludeText
+68
+IncludeText field.
+wdFieldIndex
+8
+Index field.
+wdFieldIndexEntry
+4
+XE (Index Entry) field.
+wdFieldInfo
+14
+Info field.
+wdFieldKeyWord
+18
+Keywords field.
+wdFieldLastSavedBy
+20
+LastSavedBy field.
+wdFieldLink
+56
+Link field.
+wdFieldListNum
+90
+ListNum field.
+wdFieldMacroButton
+51
+MacroButton field.
+wdFieldMergeBarcode
+98
+MergeBarcode field.
+wdFieldMergeField
+59
+MergeField field.
+wdFieldMergeRec
+44
+MergeRec field.
+wdFieldMergeSeq
+75
+MergeSeq field.
+wdFieldNext
+41
+Next field.
+wdFieldNextIf
+42
+NextIf field.
+wdFieldNoteRef
+72
+NoteRef field.
+wdFieldNumChars
+28
+NumChars field.
+wdFieldNumPages
+26
+NumPages field.
+wdFieldNumWords
+27
+NumWords field.
+wdFieldOCX
+87
+OCX field. Cannot be added through the Field dialog box, but can be added through code by using the AddOLEControl method of the Shapes collection or of the InlineShapes collection.
+wdFieldPage
+33
+Page field.
+wdFieldPageRef
+37
+PageRef field.
+wdFieldPrint
+48
+Print field.
+wdFieldPrintDate
+23
+PrintDate field.
+wdFieldPrivate
+77
+Private field.
+wdFieldQuote
+35
+Quote field.
+wdFieldRef
+3
+Ref field.
+wdFieldRefDoc
+11
+RD (Reference Document) field.
+wdFieldRevisionNum
+24
+RevNum field.
+wdFieldSaveDate
+22
+SaveDate field.
+wdFieldSection
+65
+Section field.
+wdFieldSectionPages
+66
+SectionPages field.
+wdFieldSequence
+12
+Seq (Sequence) field.
+wdFieldSet
+6
+Set field.
+wdFieldShape
+95
+Shape field. Automatically created for any drawn picture.
+wdFieldSkipIf
+43
+SkipIf field.
+wdFieldStyleRef
+10
+StyleRef field.
+wdFieldSubject
+16
+Subject field.
+wdFieldSubscriber
+82
+Macintosh only. For information about this constant, consult the language reference Help included with Microsoft Office Macintosh Edition.
+wdFieldSymbol
+57
+Symbol field.
+wdFieldTemplate
+30
+Template field.
+wdFieldTime
+32
+Time field.
+wdFieldTitle
+15
+Title field.
+wdFieldTOA
+73
+TOA (Table of Authorities) field.
+wdFieldTOAEntry
+74
+TOA (Table of Authorities Entry) field.
+wdFieldTOC
+13
+TOC (Table of Contents) field.
+wdFieldTOCEntry
+9
+TOC (Table of Contents Entry) field.
+wdFieldUserAddress
+62
+UserAddress field.
+wdFieldUserInitials
+61
+UserInitials field.
+wdFieldUserName
+60
+UserName field.
+wdFieldBibliography
+97
+Bibliography field.
+wdFieldCitation
+96
+Citation field.*/

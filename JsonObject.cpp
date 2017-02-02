@@ -41,7 +41,7 @@ String TJsonObject::readNode(const String& str, int& pos)
             else
             {
                 _resultCode = RT_END_NODE;
-                return NULL;
+                return "";
             }
         }
     }
@@ -49,7 +49,7 @@ String TJsonObject::readNode(const String& str, int& pos)
     if (p1 < 0)
     {
         _resultCode = RT_END_TEXT;
-        return NULL;
+        return "";
     }
 
     // Search the opening double quote
@@ -275,7 +275,14 @@ void TJsonObject::parse()
 
 TJsonNode* TJsonObject::getRootNode()
 {
-    return &_result;
+    if (_result.SubNode.begin() == _result.SubNode.end())
+    {
+        return NULL;
+    }
+    else
+    {
+        return &_result;
+    } 
 }
 
 

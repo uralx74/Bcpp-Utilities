@@ -36,6 +36,51 @@
 
 using namespace std;
 
+
+namespace DateUtilsAlt
+{
+//------------------------------------------------------------------------------
+// Год из TDate
+Word YearOf(const TDate dt)
+{
+    unsigned short dd, mm, yyyy;
+    dt.DecodeDate(&yyyy, &mm, &dd);
+    return yyyy;
+}
+
+//------------------------------------------------------------------------------
+// Месяц из TDate
+Word MonthOf(const TDate dt)
+{
+    unsigned short dd, mm, yyyy;
+    dt.DecodeDate(&yyyy, &mm, &dd);
+    return mm;
+}
+
+//------------------------------------------------------------------------------
+// День из TDate
+Word DayOf(const TDate dt)
+{
+    unsigned short dd, mm, yyyy;
+    dt.DecodeDate(&yyyy, &mm, &dd);
+    return dd;
+}
+
+//------------------------------------------------------------------------------
+// Количество дней в месяце
+Word DaysInMonth(const TDate dt)
+{
+    unsigned short dd, mm, yyyy;
+    dt.DecodeDate(&yyyy, &mm, &dd);
+    int leap = IsLeapYear(yyyy) ? 1 : 0;
+    return Sysutils::MonthDays[leap][mm - 1];
+}
+}
+
+
+namespace tasktools
+{
+
 enum str_pad_type {STR_PAD_LEFT = 0, STR_PAD_RIGHT};
 
 typedef struct { //  Структура для использования в функциях ExplodeByBackslash
@@ -51,6 +96,7 @@ typedef struct { //  Структура для использования в функциях ExplodeByBackslash
     String startsep;
     String endsep;
 } EXPLODESTRING2;
+
 
 
 /*
@@ -82,42 +128,6 @@ inline int MessageBoxStop(String msg, unsigned short flags = MB_ICONSTOP + MB_OK
     return(Application->MessageBox(msg.c_str(), Application->Title.c_str(), flags));
 }*/
 
-//------------------------------------------------------------------------------
-// Год из TDate
-Word YearOf(const TDate dt)
-{
-    unsigned short dd, mm, yyyy;
-    dt.DecodeDate(&yyyy, &mm, &dd);
-    return yyyy;
-}
-
-//------------------------------------------------------------------------------
-// Месяц из TDate
-Word MonthOf(const TDate dt)
-{
-    unsigned short dd, mm, yyyy;
-    dt.DecodeDate(&yyyy, &mm, &dd);
-    return mm;
-}
-
-//------------------------------------------------------------------------------
-// День из TDate
-Word DayOf(const TDate dt)
-{
-    unsigned short dd, mm, yyyy;
-    dt.DecodeDate(&yyyy, &mm, &dd);
-    return dd;
-}
-
-//------------------------------------------------------------------------------
-// Количество дней в месяце
-Word DaysInAMonth(const TDate dt)
-{
-    unsigned short dd, mm, yyyy;
-    dt.DecodeDate(&yyyy, &mm, &dd);
-    int leap = IsLeapYear(yyyy) ? 1 : 0;
-    return Sysutils::MonthDays[leap][mm - 1];
-}
 
 //---------------------------------------------------------------------------
 // Дополнить строку справа
@@ -180,6 +190,7 @@ void ExploreFile(HWND Handle, AnsiString Path)
     ShellExecute(Handle, "OPEN", "EXPLORER", ("/select, " + Path).c_str(), NULL ,SW_NORMAL);
 }
 
+
 //------------------------------------------------------------------------------
 // Создание массива типа varVariant
 Variant CreateVariantArray(int RowCount, int ColCount)
@@ -238,6 +249,24 @@ string Implode(const vector<string> &pieces, const string &glue = "")
  	return a;
 }     */
 
+
+
+//------------------------------------------------------------------------------
+// Объединяет вектор подстрок в одну строку используя соединитель
+String MergeStr(const String& s1, const String& s2, const String &glue = "")
+{
+	
+	if (s1 != "" && s2 != "")
+	{
+		return s1 + glue + s2;
+	}
+ 	else
+	{
+		return s1 == "" ? s2 : s1;
+	}
+}
+
+
 //------------------------------------------------------------------------------
 // Объединяет вектор подстрок в одну строку используя соединитель
 AnsiString Implode(const vector<AnsiString> &pieces, const AnsiString &glue = "")
@@ -252,6 +281,7 @@ AnsiString Implode(const vector<AnsiString> &pieces, const AnsiString &glue = ""
  	}
  	return a;
 }
+
 
 //------------------------------------------------------------------------------
 // Объединяет вектор подстрок в одну строку используя соединитель
@@ -449,7 +479,8 @@ vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separators
     //str = "_date(0,(0),0,0,'mm.yyyy')";
 
 	vector<EXPLODESTRING2> result;
- 	unsigned int found_start, found_end;
+ 	int found_start;
+    int found_end;
 
     int seplength_start = separatorstart.Length();
     int seplength_end = separatorend.Length();
@@ -459,8 +490,10 @@ vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separators
 
     EXPLODESTRING2 item;
 
- 	while(found_start != 0 && found_end != 0 /*&& found_start < found_end*/){
-        if (addEmpty && found_start > 0) { // Фрагмент за скобками
+ 	while(found_start != 0 && found_end != 0 /*&& found_start < found_end*/)
+    {
+        if (addEmpty && found_start > 0)  // Фрагмент за скобками
+        {
             item.text = str.SubString(found_end, found_start-found_end);
             item.fBacksleshed = false;
             item.startpos = found_end;    // Надо тестировать!!!!!!!!!!!!!!!!!!
@@ -483,8 +516,9 @@ vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separators
  	}
 
     // Фрагмент за скобками в конце строки
- 	if(addEmpty && (found_end < str.Length())){
-        item.text = str.SubString(found_end, str.Length()-found_end+1);
+ 	if( addEmpty && ( found_end < str.Length() ) )
+    {
+        item.text = str.SubString(found_end, str.Length() - found_end + 1);
         item.fBacksleshed = false;
         item.startpos = found_end;    // Надо тестировать!!!!!!!!!!!!!!!!!!
         item.endpos = found_end;      // Надо тестировать!!!!!!!!!!!!!!!!!!
@@ -499,7 +533,8 @@ vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separators
 vector<EXPLODESTRING> ExplodeByBackslash(AnsiString str, AnsiString separatorstart, AnsiString separatorend, bool addEmpty = true)
 {
 	vector<EXPLODESTRING> result;
- 	unsigned int found_start, found_end;
+ 	int found_start;
+    int found_end;
 
     int seplength_start = separatorstart.Length();
     int seplength_end = separatorend.Length();
@@ -791,7 +826,7 @@ AnsiString __fastcall CreateWorkDir(AnsiString work_dir)
     SetCurrentDir(tek_kat);
     return (tek_kat);
 }
-
+}; // tasktools namespace
 //------------------------------------------------------------------------------
 // Возращает полный путь к временному каталогу пользователя Windows
 AnsiString __fastcall GetTempPath()
@@ -842,6 +877,7 @@ AnsiString AddWhere(AnsiString whereblock, AnsiString condition, bool addif)
 
     return whereblock;
 }
+
 
 //---------------------------------------------------------------------------
 // Структура Caption-Value
@@ -1030,5 +1066,7 @@ String TimeBetween()
     int ss = TotalSec % 60;
     sTotalTime = s
 }*/
+
+
 
 #endif TASKUTILS_H
