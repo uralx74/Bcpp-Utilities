@@ -93,7 +93,6 @@ void __fastcall MSExcelWorks::SetColumnWidth(Variant& range, int Width)
     range.OlePropertySet("ColumnWidth", Width);
 }
 
-
 //----------------------------------------------------------------------------
 // Возращает количество строк в Range
 int __fastcall MSExcelWorks::GetRangeRowsCount(Variant& range)
@@ -133,38 +132,81 @@ void __fastcall MSExcelWorks::ClearWorksheet(Variant& Worksheet)
 
 //----------------------------------------------------------------------------
 // Возвращает вектор с именами полей на листе
-std::vector<AnsiString> __fastcall MSExcelWorks::GetNamesFromWorksheet(Variant& Worksheet)
+// Object может быть Workbook или Worksheet.
+std::vector<TNamedRange> __fastcall MSExcelWorks::GetNamesFromObject(Variant& Object, const String& prefix)
 {
-    Variant vNames = Worksheet.OlePropertyGet("Names");
-    int nNamesCount = vNames.OlePropertyGet("Count");
-    std::vector<AnsiString> vFields;
-    vFields.reserve(nNamesCount);
+    Variant names = Object.OlePropertyGet("Names");
+    int namesCount = names.OlePropertyGet("Count");
+    std::vector<TNamedRange> result;
+    result.reserve(namesCount);
 
-    for(int i=1; i < nNamesCount + 1; i++) {
-        AnsiString sName = vNames.OleFunction("Item", i).OlePropertyGet("Name");
-        int n = sName.Pos("!");
-        //AnsiString sRefers = vNames.OleFunction("Item", i).OlePropertyGet("RefersToR1C1");  // Можно расширить функцию и возвращать адреса R1C1 Range
-        sName = sName.SubString(n+1, sName.Length() - n);     // Берем часть строки после ! (Пример: Лист1!ИМЯ)
-        vFields.push_back(sName);
+    if (prefix == "")
+    {
+        for(int i = 1; i <= namesCount; i++)
+        {
+            Variant namesItem = names.OleFunction("Item", i);
+            String name = namesItem.OlePropertyGet("Name");
+            Variant range = namesItem.OlePropertyGet("RefersToRange");
+            result.push_back(std::make_pair(name, range));
+        }
     }
-    return vFields;
+    else
+    {
+        for(int i = 1; i <= namesCount; i++)
+        {
+            Variant namesItem = names.OleFunction("Item", i);
+            String name = namesItem.OlePropertyGet("Name");
+            name = deletePrefix(name, prefix);
+            if (name != "")
+            {
+                Variant range = namesItem.OlePropertyGet("RefersToRange");
+                result.push_back(std::make_pair(name, range));
+            }
+        }
+    }
+    return result;
+}
+
+/* Удаляет префикс из строки */
+String MSExcelWorks::deletePrefix(String value, String prefix)
+{
+    // проверить эту функцию!
+    int valueLength = value.Length();
+    int prefixLength = prefix.Length();
+    if ( value.Pos(prefix) == 1 )
+    {
+        return value.SubString(prefixLength + 1, valueLength - prefixLength);
+    }
+    else
+    {
+        return "";
+    }
 }
 
 //----------------------------------------------------------------------------
 // Возвращает вектор с именами полей в книге
+// Обьект Workbook может быть Worksheet
+// Устаревшая! В дальнейшем удалить!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 std::vector<AnsiString> __fastcall MSExcelWorks::GetNamesFromWorkbook(Variant& Workbook)
 {
     Variant vNames = Workbook.OlePropertyGet("Names");
     int nNamesCount = vNames.OlePropertyGet("Count");
-    std::vector<AnsiString> vFields;
+    std::vector<String> vFields;
     vFields.reserve(nNamesCount);
 
     for(int i=1; i < nNamesCount + 1; i++)
     {
-        AnsiString sName = vNames.OleFunction("Item", i).OlePropertyGet("Name");
+        String sName = vNames.OleFunction("Item", i).OlePropertyGet("Name");
+
+        // эту часть возможно убрать
+        int p1 = sName.Pos("!");
+        if (p1 > 0)              // Берем часть строки после ! (Пример: Лист1!ИМЯ)
+        {
+            sName = sName.SubString(p1+1, sName.Length()-p1);
+        }
         vFields.push_back(sName);
     }
-    return vFields;
+    return vFields;   
 }
 
 //----------------------------------------------------------------------------
@@ -179,7 +221,7 @@ Variant __fastcall MSExcelWorks::GetRange(Variant& Worksheet, int firstRow, int 
 
 //----------------------------------------------------------------------------
 // Возращает Range по имени
-Variant __fastcall MSExcelWorks::GetRangeByName(Variant& Worksheet, const AnsiString& RangeName)
+Variant __fastcall MSExcelWorks::GetRangeByName(Variant& Worksheet, const String& RangeName)
 {
     try
     {
@@ -228,6 +270,7 @@ Variant __fastcall MSExcelWorks::GetRangeFromRange(Variant& range, int firstRow,
     Variant sell_left_top = Cells.OlePropertyGet("Item", firstRow, firstCol);
 	Variant sell_right_bottom = Cells.OlePropertyGet("Item", firstRow+countRow-1, firstCol+countCol-1);
     Variant Worksheet = range.OlePropertyGet("Worksheet");
+    //Variant Worksheet = range.OlePropertyGet("Parent");
     return Worksheet.OlePropertyGet("Range", sell_left_top, sell_right_bottom);
 }
 
@@ -401,9 +444,28 @@ void __fastcall MSExcelWorks::CopyRangeFormat(Variant& range_src, Variant& range
 
 //----------------------------------------------------------------------------
 // Выводит содержимое массива в указанную на листе область
-Variant __fastcall MSExcelWorks::WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, std::vector<AnsiString> *DataFormat)
+Variant __fastcall MSExcelWorks::WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, bool extendAllow, std::vector<AnsiString> *DataFormat)
 {
-    if (DataFormat != NULL) {
+    Variant ArrayRowsCount = VarArrayHighBound(ArrayData, 1) - VarArrayLowBound(ArrayData, 1)+1;
+    Variant ArrayColsCount = VarArrayHighBound(ArrayData, 2) - VarArrayLowBound(ArrayData, 2)+1;
+
+    if (ArrayRowsCount > 1 && extendAllow)     // Если кол-во строк больше 1, то необходимо расширить диапазон
+    {
+        Variant worksheet = range.OlePropertyGet("Parent");
+
+        Variant extend_range = GetRangeFromRange(range, 2, 1, ArrayRowsCount-1, ArrayColsCount);
+        extend_range = InsertRows(extend_range);          // Вставляем строки со сдвигом вниз (копируется и формат ячеек - формат данных)
+
+        if (DataFormat == NULL)     // Если не задан формат данных, то копируем из исходного диапазона
+        {
+            CopyRangeFormat(range, extend_range);
+        }
+
+        range = GetRangeFromRange(range, 1, 1, ArrayRowsCount, ArrayColsCount);
+    }
+
+    if (DataFormat != NULL)
+    {
         SetRangeColumnsFormat(range, *DataFormat);
     }
 
@@ -425,7 +487,7 @@ Variant __fastcall MSExcelWorks::WriteTable(Variant& worksheet, const Variant &A
 	Variant sell_right_bottom = worksheet.OlePropertyGet("Cells", lastRow, lastCol);
 	Variant range = worksheet.OlePropertyGet("Range", sell_left_top, sell_right_bottom);
 
-    return WriteTableToRange(range, ArrayData, firstRow, firstCol, DataFormat);
+    return WriteTableToRange(range, ArrayData, firstRow, firstCol, false, DataFormat);
 
 /*    if (DataFormat != NULL) {
         SetRangeColumnsFormat(range, *DataFormat);
@@ -878,7 +940,7 @@ inline int MSExcelWorks::GetRangeFirstColumn(Variant range)
 //----------------------------------------------------------------------------
 // Дублирование верхней строки диапазона без вставки (сочетание Ctrl+D в MS Excel)
 // Не проверено!!!!
-void __fastcall MSExcelWorks::FillDown(Variant& worksheet, Variant& range)
+void __fastcall MSExcelWorks::FillDown(Variant& range)
 {
     range.OleProcedure("FillDown");
 }
@@ -888,7 +950,10 @@ void __fastcall MSExcelWorks::FillDown(Variant& worksheet, Variant& range)
 void __fastcall MSExcelWorks::InsertRows(Variant& worksheet, int RowIndex, int RowsCount)
 {
     if (RowsCount < 1)
+    {
         return;
+    }
+    
     Variant Rows = worksheet.OlePropertyGet("Rows");
     //Variant Row = Rows.OlePropertyGet("Item", RowIndex, 5);
 
@@ -923,7 +988,7 @@ Variant __fastcall MSExcelWorks::InsertRows(Variant& range)
     int RangeRowsCount = GetRangeRowsCount(range);
     int RangeColsCount = GetRangeColumnsCount(range);
 
-    range.OleProcedure("Insert", -4121);  // xlDown
+    range.OleProcedure("Insert", -4121, 0);  // xlDown
 
     return GetRange(Worksheet, RangeFirstRow, RangeFirstCol, RangeRowsCount, RangeColsCount);
 }
@@ -977,9 +1042,209 @@ Variant __fastcall MSExcelWorks::CopyRange(Variant& worksheet, const Variant& ra
     return range_new;
 }
 
+/* */
+String MSExcelWorks::getCellName(Variant cell, const String& prefix)
+{
+    return cell.OlePropertyGet("Name").OlePropertyGet("Name");
+}
+
+/* Возвращает список для привязки полей из dataSet к table
+*/
+std::vector<TLinkFields> MSExcelWorks::assignDataSetToRangeFields(Variant range, TDataSet* dataSet, const String& fieldNamePrefix)
+{
+    std::vector<TLinkFields> result;
+    result.reserve(dataSet->FieldCount);
+
+    //Variant fields = range.OlePropertyGet("Fields");
+
+
+    int prefixLength = fieldNamePrefix.Length();
+    Variant cells = range.OlePropertyGet("Cells");
+    int n = cells.OlePropertyGet("Count");
+    //int n = GetRangeColumnsCount(range);
+
+    for (int i = 1; i < n; i++ )         // цикл по полям в строке
+    {
+
+        Variant cell = cells.OlePropertyGet("Item", 1, i);
+        String cellName = getCellName(cell, fieldNamePrefix);
+
+
+        if (cellName != "")
+        {
+            // Сопоставляем поле с полем в источнике
+            //int fieldIndex = field.OlePropertyGet("Index");   //  Это значение является сквозным значением на весь документ
+
+            TField* fieldOfDataSet = dataSet->Fields->FindField(cellName);
+            if ( fieldOfDataSet )
+            {
+                result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
+            }
+        }
+
+
+        /*
+
+        Variant field = fields.OleFunction("Item", i);
+        String fieldName = getFieldName(field, 64);
+
+        String test = fieldName.SubString(1, prefixLength);
+
+
+        if (prefixLength > 0  )
+        {
+            if ( fieldName.Length() > prefixLength && fieldName.SubString(1, prefixLength) == fieldNamePrefix)
+            {
+                fieldName = fieldName.SubString(prefixLength+1, fieldName.Length() - prefixLength);
+            }
+            else
+            {
+                continue;
+            }
+        }
+
+        if (fieldName != "")
+        {
+            // Сопоставляем поле с полем в источнике
+            //int fieldIndex = field.OlePropertyGet("Index");   //  Это значение является сквозным значением на весь документ
+
+            TField* fieldOfDataSet = dataSet->Fields->FindField(fieldName);
+            if ( fieldOfDataSet )
+            {
+                result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
+            }
+        }  */
+    }
+
+    return result;
+}
+
+/* НОВАЯ 2017-02-15 */
+void MSExcelWorks::writeDataSetToSingleRange(Variant worksheet, TDataSet* dataSet, const String& fieldNamePrefix)
+{
+   //GetRangeByName(range, "fa_pack_id");
+   //GetRangeByName(worksheet, "t");
+   //Variant Parent = worksheet.OlePropertyGet("Parent");
+
+    //std::vector<String> fieldNames = GetNamesFromWorkbook(worksheet);
+    std::vector<TNamedRange> fieldNames = GetNamesFromObject(worksheet, fieldNamePrefix);
+
+    for (std::vector<TNamedRange>::iterator it = fieldNames.begin(); it != fieldNames.end(); it++)
+    {
+        TField* dataSetField = dataSet->Fields->FindField( (*it).first );
+        if ( dataSetField )
+        {
+            //worksheet.OlePropertyGet("Parent");
+            //Variant range = GetRangeByName(worksheet, *it);
+            WriteToRange(dataSetField->AsString, (*it).second);
+        }
+    }
+
+    /*
+        std::vector<String> vExcelFields = GetNamesFromWorkbook(Workbook);
+
+        for (std::vector<String>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++)
+        {
+            TField* pField = QTable->Fields->FindField(*itExcelField);
+            if (pField)
+            {
+                try {
+                    Variant range = GetRangeByName(Worksheet, *itExcelField);
+                    // Закомментировано 2016-11-17
+                    //if ( !VarIsEmpty(range) ) {
+                    if ( !VarIsClear(range) )
+                    {
+                        WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
+                    }
+                }
+                catch (...)
+                {
+                }
+            }
+        } */
+
+
+}
+
+/* НОВАЯ 2017-02-15 */
+void MSExcelWorks::writeDataSetToTableRange(Variant tableRange, TDataSet* dataSet, const String& fieldNamePrefix)
+{
+    std::vector<TLinkFields> links = assignDataSetToRangeFields(tableRange, dataSet, fieldNamePrefix);
+
+
+    if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)
+    {
+        return;
+    }
+
+    Variant cells = tableRange.OlePropertyGet("Cells");
+    int RecordCount = dataSet->RecordCount;
+    int RangeColumnsCount = cells.OlePropertyGet("Count");
+
+    Variant data_body = CreateVariantArray(RecordCount, RangeColumnsCount);
+    VarArrayLock(data_body);
+
+    int j = 1;
+    for (; !dataSet->Eof; dataSet->Next() )
+    {
+
+        //rowTmp.OlePropertyGet("Range").OlePropertySet("FormattedText" , formatedText );
+        //Variant fields = rows.OleFunction("Item", currentRow++).OlePropertyGet("Range").OlePropertyGet("Fields");
+
+        for (std::vector<TLinkFields>::iterator it = links.begin(); it < links.end(); it++)
+        {
+            String value = dataSet->Fields->FieldByNumber(it->first)->AsString;
+            data_body.PutElement(value, j, it->second);
+
+            //Variant field = fields.OleFunction("Item", it->second);
+            //field.OlePropertyGet("Result").OlePropertySet("Text", dataSet->Fields->FieldByNumber(it->first)->AsString.c_str());
+        }
+        j++;
+    }
+
+    VarArrayUnlock(data_body);
+
+
+    // Выводим на лист, в позицию rPos, cPos
+    //Variant range = WriteTable(Worksheet, data_body, RangeFirstRow, RangeFirstColumn);
+    Variant range = WriteTableToRange(tableRange, data_body, 1, 1, true);
+
+    // Освобождение памяти
+    VarClear(data_body);
+
+
+
+    /*int j = 1;
+    for (QTable->First(); !QTable->Eof; QTable->Next() )
+    {
+        for (int i = 1; i <= RangeColumnsCount; i++)
+        {
+            String value;
+
+            if ( bindingList[i-1].second )
+            {
+                value = QTable->FieldByName( bindingList[i-1].first )->AsString;
+            }
+            else
+            {
+                value = "NA:" + bindingList[i-1].first;
+            }
+
+            data_body.PutElement(value, j, i);
+        }
+        j++;
+    }                   */
+}
+
+
+
+
+
+
 //---------------------------------------------------------------------------
 // Заполняет именованную таблицу с именованными столбцами
 // соответствующими значениями из TOraQuery
+// Устаревший вариант, в дальнейшем удалить !!!!!!!!!!!!!!!!!!!!!!!!!!
 Variant MSExcelWorks::ExportToExcelTable(TDataSet* QTable, Variant Worksheet, String RangeName, bool fUnbounded)
 {
     // Получаем range, куда необходимо выводить таблицу,
@@ -1097,7 +1362,6 @@ Variant MSExcelWorks::ExportToExcelTable(TDataSet* QTable, Variant Worksheet, St
 // на соответствующие значения из TOraQuery
 void MSExcelWorks::ExportToExcelFields(TDataSet* QTable, Variant Worksheet)
 {
-    MSExcelWorks msexcel;
     try
     {
         // Получаем range, куда необходимо выводить таблицу,
@@ -1111,20 +1375,20 @@ void MSExcelWorks::ExportToExcelFields(TDataSet* QTable, Variant Worksheet)
         }
 
         Variant Workbook = Worksheet.OlePropertyGet("Parent");
-        std::vector<AnsiString> vExcelFields = msexcel.GetNamesFromWorkbook(Workbook);
+        std::vector<String> vExcelFields = GetNamesFromWorkbook(Workbook);
 
-        for (std::vector<AnsiString>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++)
+        for (std::vector<String>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++)
         {
             TField* pField = QTable->Fields->FindField(*itExcelField);
             if (pField)
             {
                 try {
-                    Variant range = msexcel.GetRangeByName(Worksheet, *itExcelField);
+                    Variant range = GetRangeByName(Worksheet, *itExcelField);
                     // Закомментировано 2016-11-17
                     //if ( !VarIsEmpty(range) ) {
                     if ( !VarIsClear(range) )
                     {
-                        msexcel.WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
+                        WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
                     }
                 }
                 catch (...)

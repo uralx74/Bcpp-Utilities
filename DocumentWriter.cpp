@@ -29,10 +29,250 @@ void __fastcall TDocumentWriterResult::appendResultFiles(std::vector<String> fil
    1. Функция может изменить положение курсора в передаваемых DataSet.
    2. Функция может изменить значение Filter в передаваемых DataSet.
 */
-void __fastcall TDocumentWriter::ExportToWordTemplate(const TWordExportParams* wordExportParams, TDataSet *QueryMerge, TDataSet *QueryFormFields)
+void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExportParams)
+// TDataSet *QueryMerge, TDataSet *QueryFormFields)
 {
     CoInitialize(NULL);
-    result.clear();
+    _result.clear();
+
+
+    //String TemplateFullName = AppPath + param_word.template_name; // Абсолютный путь к файлу-шаблону
+    //String SavePath = ExtractFilePath(wordExportParams->resultFileDirectory);         // Путь для сохранения результатов
+    //String ResultFileNamePrefix = ExtractFileName(DstFileName);     // Префикс имени файла-результата
+
+    //std::vector<String> formFields;    // Вектор с именами файлов - результатов
+
+    /*if (QueryMerge->RecordCount == 0)
+    {
+        return;
+    }   */
+
+
+    MSWordWorks msword;// = new MSWordWorks();
+    Variant wordDocument;   // Шаблон
+
+    try
+    {
+        msword.OpenWord();
+
+        #ifdef _DEBUG
+        msword.SetVisible(true);
+        msword.SetDisplayAlerts(true);
+        #endif
+
+        wordDocument =  msword.OpenDocument(wordExportParams->templateFilename, false);
+    }
+    catch (Exception &e)
+    {
+        /*
+        switch (e)
+        {
+        case 1:
+        }
+        String msg = "Неудалось создать экземпляр приложения Microsoft Word."
+            "\nПожалуйста, обратитесь к системному администратору.\n" + e.Message;
+
+        msword.CloseApplication();
+        VarClear(Document);
+
+        String msg = "Неудалось открыть шаблон " + wordExportParams->templateFilename +
+            "\nПожалуйста, обратитесь к системному администратору.\n" + e.Message;
+        throw Exception(msg);*/
+        return;
+
+    }
+
+
+    // Нужно ли учитывать QueryFormFields->RecordCount ?
+    // закомментированно 2017-02-15
+    //bool bFilterExist = wordExportParams->filter_main_field != "" && wordExportParams->filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
+
+
+    /* В первую очередь меняем одиночные поля - изображения */
+    for (std::vector<TWordSingleDataSet>::iterator ds = wordExportParams->singleImageDs.begin(); ds != wordExportParams->singleImageDs.end(); ds++ )
+    {
+        msword.ReplaceImageVariables(wordDocument, (*ds).dataSet, (*ds).fieldNamePrefix);
+    }
+
+    /* В первую очередь меняем одиночные поля - текст*/
+    for (std::vector<TWordSingleDataSet>::iterator ds = wordExportParams->singleTextDs.begin(); ds != wordExportParams->singleTextDs.end(); ds++ )
+    {
+        msword.ReplaceVariables(wordDocument, (*ds).dataSet, (*ds).fieldNamePrefix);
+    }
+
+    /* Затем заполняем таблицы, если они конечно есть */
+    for (std::vector<TWordTableDataSet>::iterator ds = wordExportParams->tableDs.begin(); ds != wordExportParams->tableDs.end(); ds++ )
+    {
+        Variant table = msword.GetTableByIndex(wordDocument, (*ds).tableIndex);
+        msword.writeDataSetToTable(table, (*ds).dataSet, (*ds).fieldNamePrefix);
+    }
+
+    /* И наконец делаем слияние */
+    for (std::vector<TWordMergeDataSet>::iterator ds = wordExportParams->mergeDs.begin(); ds != wordExportParams->mergeDs.end(); ds++ )
+    {
+        std::vector<String> vResults;
+        vResults = msword.ExportToWordFields( *ds, wordDocument, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
+        _result.appendResultFiles(vResults);
+    }
+
+    // Если не было слияния, то сохраняем текущий документ (иначе при файлы с результатом сохраняются в процедуре слияния)
+    if (wordExportParams->mergeDs.size() == 0)
+    {
+        msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename + ".doc");
+    }
+
+    VarClear(wordDocument);
+    msword.CloseApplication();
+
+    CoUninitialize();
+
+
+    /*if ()
+    {
+        // Если задан один запрос, то делаем только слияние
+        // Слияние документа Word с таблицей
+        if (QueryMerge->RecordCount > 0)
+        {
+
+            std::vector<AnsiString> vNew;
+            vNew = msword.ExportToWordFields(QueryMerge, Document, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
+            result.appendResultFiles(vNew);
+        }
+    }
+    else
+    {
+        // Если задано два запроса, то:
+        // 1. если задан фильтр в цикле задаем фильтр основному запросу
+        // 2. подставляем значения в FormFields-поля в шаблоне
+        // 3. делаем слияние
+        //int n_doc = 0;  // Порядковый номер процедуры слияния (используется в имени файлов результатов)
+        //int nPadLength = IntToStr(QueryFormFields->RecordCount).Length();
+ * /
+        String oldFilter = QueryMerge->Filter;
+
+        while ( !QueryFormFields->Eof )
+        {
+
+            if ( VarIsEmpty(Document) )           // Если шаблон не открыт, открываем его (требуется на втором шаге цикла)
+            {
+                Document = msword.OpenDocument(wordExportParams->templateFilename, false);
+            }
+
+            if ( bFilterExist )  // Если во вспомогательном запросе больше 1 строки, то применяем фильтр
+            {
+                try
+                {
+                    String sFilter = wordExportParams->filter_main_field + "='" + QueryFormFields->FieldByName(wordExportParams->filter_sec_field)->AsString + "'";
+                    if (oldFilter != "")
+                    {
+                        sFilter = " AND " + sFilter;
+                    }
+
+                    //QueryMerge->Filtered = false;
+                    QueryMerge->Filter = oldFilter + sFilter;
+                    QueryMerge->Filtered = true;
+                }
+                catch ( Exception &e )
+                {
+                    QueryMerge->Filtered = false;
+                    //String msg = "Проверьте корректность параметров фильтра в параметрах экспорта или обратитесь к системному администратору.\n" + e.Message;
+                    //throw Exception(msg);
+                    break;
+                }
+
+            }
+
+            if (QueryMerge->RecordCount != 0)         // Если нет записей, то следующий шаг цикла
+            {
+
+                //Замена полей FormFields
+                msword.ReplaceFormFields(Document, QueryFormFields);
+
+                // Слияние
+                std::vector<String> vNew;   // переменная для сохранения результатов слияния
+
+                try
+                {
+                    vNew = msword.ExportToWordFields(QueryMerge, Document, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
+                }
+                catch (Exception &e)
+                {
+                    / *_threadStatus = WM_THREAD_ERROR_IN_PROCESS;
+                    _threadMessage = "В процессе слияния документа с источником данных произошла ошибка."
+                        "\nОбратитесь к системному администратору."
+                        "\n" + e.Message; * /
+                    break;
+                }
+
+                result.appendResultFiles(vNew);
+                vNew.clear();
+            }
+
+
+
+            #ifndef _DEBUG
+            msword.CloseDocument(Document);
+            VarClear(Document);
+            #endif
+
+            if ( bFilterExist )
+            {
+                QueryFormFields->Next();
+            }
+            else
+            {
+                // Если фильтр не установлен, тогда выходим из цикла
+                break;
+            }
+        }
+    }
+
+    if (!VarIsEmpty(Document))      // Если шаблон открыт
+    {
+        #ifndef DEBUG
+        msword.CloseDocument(Document);
+        #endif
+    }             */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+ Заполнение шаблона MS Word
+ QueryMerge - основной запрос, используется в качестве источника данных при слиянии
+ QueryFormFields - вспомогательный запрос, используется в качестве источника данных
+ при замене полей FormFields в шаблоне MS Word. Может быть NULL.
+ Если QueryFormFields == NULL, то выполняется только слияние.
+ Если в параметрах wordExportParams не задана связь, то из QueryFormFields используется только текущая строка.
+ ВАЖНО:
+   1. Функция может изменить положение курсора в передаваемых DataSet.
+   2. Функция может изменить значение Filter в передаваемых DataSet.
+*/
+void __fastcall TDocumentWriter::ExportToWordTemplate_old(const TWordExportParams* wordExportParams, TDataSet *QueryMerge, TDataSet *QueryFormFields)
+{
+    CoInitialize(NULL);
+    _result.clear();
 
 
     //String TemplateFullName = AppPath + param_word.template_name; // Абсолютный путь к файлу-шаблону
@@ -54,7 +294,7 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(const TWordExportParams* w
     {
         msword.OpenWord();
 
-        #ifndef NDEBUG
+        #ifdef _DEBUG
         msword.SetVisible(true);
         msword.SetDisplayAlerts(true);
         #endif
@@ -96,7 +336,7 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(const TWordExportParams* w
 
             std::vector<AnsiString> vNew;
             vNew = msword.ExportToWordFields(QueryMerge, Document, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
-            result.appendResultFiles(vNew);
+            _result.appendResultFiles(vNew);
         }
     }
     else
@@ -164,13 +404,13 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(const TWordExportParams* w
                     break;
                 }
 
-                result.appendResultFiles(vNew);
+                _result.appendResultFiles(vNew);
                 vNew.clear();
             }
 
 
 
-            #ifndef DEBUG
+            #ifndef _DEBUG
             msword.CloseDocument(Document);
             VarClear(Document);
             #endif
@@ -189,7 +429,7 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(const TWordExportParams* w
 
     if (!VarIsEmpty(Document))      // Если шаблон открыт
     {
-        #ifndef DEBUG
+        #ifndef _DEBUG
         msword.CloseDocument(Document);
         VarClear(Document);
         #endif
@@ -504,7 +744,7 @@ void __fastcall TDocumentWriter::ExportToExcel(TOraQuery *OraQuery)
 
 //---------------------------------------------------------------------------
 // Заполнение Excel файла с использованием шаблона xlt
-void __fastcall TDocumentWriter::ExportToExcelTemplate(const TExcelExportParams* excelExportParams, TDataSet* QueryTable, TDataSet* QueryFields)
+void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excelExportParams)
 {
     CoInitialize(NULL);
 
@@ -535,7 +775,29 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(const TExcelExportParams*
         throw Exception(msg);
     }
 
-    // Сначала делаем замену полей
+
+    /* Сначала заполняем отдельные поля */
+    for (std::vector<TExcelSingleDataSet>::iterator ds = excelExportParams->singleDs.begin(); ds != excelExportParams->singleDs.end(); ds++ )
+    {
+        msexcel.writeDataSetToSingleRange(Workbook, (*ds).dataSet, (*ds).fieldNamePrefix);
+    }
+
+    /* Затем заполняем таблицы, если они конечно есть */
+    for (std::vector<TExcelTableDataSet>::iterator ds = excelExportParams->tableDs.begin(); ds != excelExportParams->tableDs.end(); ds++ )
+    {
+        //Variant table =  msexcel.GetTableByName(Worksheet, (*ds).tableName);
+        Variant table =  msexcel.GetRangeByName(Worksheet, (*ds).tableName);
+        msexcel.writeDataSetToTableRange(table, (*ds).dataSet, (*ds).fieldNamePrefix);
+    }
+
+    msexcel.SaveDocument(Workbook, excelExportParams->resultFilename + ".xlsx");
+
+    VarClear(Worksheet);
+    msexcel.CloseApplication();
+    CoUninitialize();
+
+
+    /*// Сначала делаем замену полей
     try
     {
         if (QueryFields != NULL)
@@ -582,7 +844,7 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(const TExcelExportParams*
         {
             msexcel.SaveDocument(Workbook, excelExportParams->resultFilename);
             msexcel.CloseApplication();
-            result.addResultFile(excelExportParams->resultFilename);
+            _result.addResultFile(excelExportParams->resultFilename);
         }
         catch (Exception &e)
         {
@@ -601,8 +863,7 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(const TExcelExportParams*
 
     // В дальнейшем сделать аналогично выгрузке в MS Word
     // обьединение двух таблиц QueryFields и QueryTable
-
-    CoUninitialize();
+    */
 }
 
 

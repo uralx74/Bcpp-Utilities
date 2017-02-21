@@ -96,13 +96,38 @@ public:
     int PagePerDocument;
     int RecCount;
     int FieldsCount;
-    AnsiString resultFilename;    // Файл - результат
+    String resultFilename;    // Файл - результат
 };
 
 typedef MergeTable MERGETABLE;
 typedef std::pair<int, int> TLinkFields;    // dataSetField, wordField
 
+class TFieldLink
+{
+public:
+    TFieldLink(int docFieldIndex_, Variant documentField_, int datasetFieldIndex_, TField* datasetField_, String fieldName_);
+    int documentFieldIndex;
+    int datasetFieldIndex;
+    String fieldName;
+    TField* datasetField;
+    Variant documentField;
+};
 
+TFieldLink::TFieldLink(int docFieldIndex_, Variant documentField_, int datasetFieldIndex_, TField* datasetField_, String fieldName_):
+    documentFieldIndex(docFieldIndex_),
+    documentField(documentField_),
+    datasetFieldIndex(datasetFieldIndex_),
+    datasetField(datasetField_),
+    fieldName(fieldName_)
+{
+}
+
+typedef enum _TDocFieldType
+{
+    DFT_UNDEFINED = 0
+    , DFT_MERGEFIELD = 59
+    , DFT_DOCVARIABLE = 64
+} TDocFieldType;
 //---------------------------------------------------------------------------
 //
 class MSWordWorks
@@ -129,15 +154,17 @@ public:
     void __fastcall SetTextToField(Variant Document, String FieldName, WideString Text);
     void __fastcall SetTextToFieldF(Variant Document, String FieldName, WideString Text);
     void __fastcall SetTextToFieldF(Variant Document, int fieldIndex, WideString Text);
-    Variant __fastcall SetPictureToField(Variant Document, Variant Field, String PictureFileName, int Width = 0, int Height = 0);
-    Variant __fastcall SetPictureToField(Variant Document, int fieldIndex, String PictureFileName, int Width = 0, int Height = 0);
-    Variant __fastcall SetPictureToField(Variant Document, String FieldName, String PictureFileName, int Width = 0, int Height = 0);
+    Variant __fastcall SetPictureToRange(Variant Document, Variant Range, String PictureFileName);
+    Variant __fastcall SetPictureToFormField(Variant Document, Variant Field, String PictureFileName, int Width = 0, int Height = 0);
+    Variant __fastcall SetPictureToFormField(Variant Document, int fieldIndex, String PictureFileName, int Width = 0, int Height = 0);
+    Variant __fastcall SetPictureToFormField(Variant Document, String FieldName, String PictureFileName, int Width = 0, int Height = 0);
     void __fastcall ConverInlineShapeToShape(Variant inlineShape, int zOrder = 4);
     void __fastcall SetShapePos(Variant shape, int x, int y);
     void __fastcall SetShapeSize(Variant shape, int width, int height);
     std::vector<String> __fastcall GetFormFields(Variant Document);
     void __fastcall FindTextForReplace(Variant document, String Text, String ReplaceText, bool fReg = true);
     void __fastcall InsertPicture(Variant Document, String PictureFileName, int Width = 0, int Height = 0);
+    Variant GetTableByIndex(Variant Document, int index);
     Variant CreateTable(Variant Document, int nCols, int nRows);
     void __fastcall InsertText(Variant Document, WideString Text);
     void __fastcall MoveUpCursor(Variant Document);
@@ -157,9 +184,11 @@ public:
 
     std::vector<String> ExportToWordFields(TDataSet* QTable, Variant Document, const String& resultPath, int PagePerDocument);
     void ReplaceFormFields(Variant Document, TDataSet* dataSet);
+    void ReplaceVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    void ReplaceImageVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix = "");
 
-    std::vector<TLinkFields> assignDataSetToTableFields(Variant table, TDataSet* dataSet);
-    void writeDataSetToTable(Variant table, TDataSet* dataSet);
+    std::vector<TFieldLink> assignDataSetToRangeFields(Variant fields, TDocFieldType fieldType, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    void writeDataSetToTable(Variant table, TDataSet* dataSet, const String& fieldNamePrefix = "");
 
    	Variant WordApp;
     HWND Handle;

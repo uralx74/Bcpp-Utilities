@@ -111,12 +111,22 @@ __fastcall CellFormat::CellFormat()
 
 typedef CellFormat CELLFORMAT;
 typedef std::vector<AnsiString> DATAFORMAT;
+typedef std::pair<int, int> TLinkFields;
+typedef std::pair<String, Variant> TNamedRange;     // Для списка имен и диапазонов
+
 
 class MSExcelWorks
 {
 private:
+    String deletePrefix(String value, String prefix);
+
 
 public:
+    /* На удаление в следующей редакции*/
+    std::vector<AnsiString> __fastcall GetNamesFromWorkbook(Variant& WorksheetOrWorkbook);
+
+
+    /**/
     enum TExportStatus {ES_ERROR_NOT_ENOUGTH_FIELD = 0, ES_ERROR_RANGE_IS_NOT_SOLID, ES_ERROR_TOO_MUCH_RECORDS};
     //enum TDirection {Down = 1, Up, Left, Right};
     //enum xlBooleane {xlDefault = -1, xlFalse, xlTrue};
@@ -133,17 +143,16 @@ public:
 	Variant __fastcall GetActiveSheet();
 	Variant __fastcall GetSheet(Variant& Workbook, int SheetIndex = 1);
     Variant __fastcall GetRange(Variant& Worksheet, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
-    Variant __fastcall GetRangeByName(Variant& Worksheet, const AnsiString& RangeName);
+    Variant __fastcall GetRangeByName(Variant& Worksheet, const String& RangeName);
     Variant __fastcall GetRangeFromRange(Variant& range, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
-    std::vector<AnsiString> __fastcall GetNamesFromWorkbook(Variant& WorksheetOrWorkbook);
-    std::vector<AnsiString> __fastcall GetNamesFromWorksheet(Variant& Worksheet);
+    std::vector<TNamedRange> __fastcall GetNamesFromObject(Variant& Object, const String& prefix = "");
     int __fastcall GetRangeRowsCount(Variant& range);
     int __fastcall GetRangeColumnsCount(Variant& range);
     AnsiString __fastcall GetRangeFormat(Variant& range);
 
     Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData,  int firstRow, int firstCol, std::vector<AnsiString> *DataFormat = NULL);
     Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData, AnsiString CellName, std::vector<AnsiString> *DataFormat = NULL);
-    Variant __fastcall WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, std::vector<AnsiString> *DataFormat = NULL);
+    Variant __fastcall WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, bool extendAllow = false, std::vector<AnsiString> *DataFormat = NULL);
 
 
 	Variant __fastcall WriteToRange(const AnsiString& txt, Variant range, AnsiString format = "");
@@ -190,7 +199,7 @@ public:
     inline int GetRangeFirstRow(Variant range);
     inline int GetRangeFirstColumn(Variant range);
 
-    void __fastcall FillDown(Variant& worksheet, Variant& range);
+    void __fastcall FillDown(Variant& range);
     void __fastcall InsertRows(Variant& worksheet, int RowIndex, int RowsCount);
     Variant __fastcall InsertRows(Variant& range);
 
@@ -200,6 +209,15 @@ public:
 
     void ExportToExcelFields(TDataSet* QTable, Variant Worksheet);
     Variant ExportToExcelTable(TDataSet* QTable, Variant Worksheet, String RangeName, bool fUnbounded = true);
+
+    std::vector<TLinkFields> assignDataSetToRangeFields(Variant range, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    void writeDataSetToSingleRange(Variant worksheet, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    void writeDataSetToTableRange(Variant tableRange, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    String getCellName(Variant cell, const String& prefix = "");
+
+
+
+
 
     bool __fastcall IsReadOnly(Variant& workbook);
 
