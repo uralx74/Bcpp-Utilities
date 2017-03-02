@@ -1221,6 +1221,7 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* dataSet, Variant D
 }
 
 /* Заменяет поля FormFields, используя значения из текущей строки dataSet
+   В качестве имени поля используется значение "Текст по умолчанию".
 */
 void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
 {
@@ -1257,13 +1258,11 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
         {
             int posClosingBracket = fieldNameCode.Pos("]");
             fieldName = fieldNameCode.SubString(posClosingBracket + 1, fieldNameCode.Length() - posClosingBracket);
-
         }
         else
         {
             fieldName = fieldNameCode;
         }
-
 
         TField* Field = dataSet->Fields->FindField(fieldName);
         if (Field != NULL) // Если нашли поле
@@ -1294,9 +1293,13 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
 }
 
 /* Заменяет поля DOCVARIABLE */
+/*void MSWordWorks::ReplaceFormtext(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
+{
+}*/
+
+/* Заменяет поля DOCVARIABLE */
 void MSWordWorks::ReplaceVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
 {
-    //Variant range = Document.OleFunction("Range").Ole;
     Variant fields = Document.OleFunction("Range").OlePropertyGet("Fields");
     std::vector<TFieldLink> links = assignDataSetToRangeFields(fields, DFT_DOCVARIABLE, dataSet, fieldNamePrefix);
 
@@ -1385,10 +1388,6 @@ void MSWordWorks::ReplaceImageVariables(Variant Document, TDataSet* dataSet, con
     rowTemplate.OleProcedure("Delete");
 
 */
-
-
-
-
 
 
 /* Вычисляет имя поля указанного типа */

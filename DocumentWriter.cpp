@@ -94,11 +94,18 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         msword.ReplaceImageVariables(wordDocument, (*ds).dataSet, (*ds).fieldNamePrefix);
     }
 
-    /* В первую очередь меняем одиночные поля - текст*/
+    /* Меняем одиночные поля - текст*/
     for (std::vector<TWordSingleDataSet>::iterator ds = wordExportParams->singleTextDs.begin(); ds != wordExportParams->singleTextDs.end(); ds++ )
     {
         msword.ReplaceVariables(wordDocument, (*ds).dataSet, (*ds).fieldNamePrefix);
     }
+
+    /* Меняем одиночные поля - FORMTEXT */
+    for (std::vector<TWordSingleDataSet>::iterator ds = wordExportParams->formtextDs.begin(); ds != wordExportParams->formtextDs.end(); ds++ )
+    {
+        msword.ReplaceFormFields(wordDocument, (*ds).dataSet/*, (*ds).fieldNamePrefix*/);
+    }
+
 
     /* Затем заполняем таблицы, если они конечно есть */
     for (std::vector<TWordTableDataSet>::iterator ds = wordExportParams->tableDs.begin(); ds != wordExportParams->tableDs.end(); ds++ )

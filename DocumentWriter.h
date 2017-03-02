@@ -176,11 +176,13 @@ public:
     std::vector<TWordTableDataSet> tableDs;   // Источники данных для заполнения таблиц
     std::vector<TWordSingleDataSet> singleTextDs;   // Источники данных для заполнения полей DOCVariable (текстом)
     std::vector<TWordSingleDataSet> singleImageDs;  // Источники данных для заполнения полей DOCVariable (изображением)
+    std::vector<TWordSingleDataSet> formtextDs;  // Источники данных для заполнения полей FORMTEXT
 
     void addMergeDataSet(TDataSet* dataSet);
     void addTableDataSet(TDataSet* dataSet, int tableIndex, const String& fieldNamePrefix = "");
     void addSingleTextDataSet(TDataSet* dataSet, const String& fieldNamePrefix = "");
     void addSingleImageDataSet(TDataSet* dataSet, const String& fieldNamePrefix = "");
+    void addFormtextDataSet(TDataSet* dataSet, const String& fieldNamePrefix = "");
 };
 
 void TWordExportParams::addMergeDataSet(TDataSet* dataSet)
@@ -203,16 +205,11 @@ void TWordExportParams::addSingleImageDataSet(TDataSet* dataSet, const String& f
     singleImageDs.push_back( TWordSingleDataSet(dataSet, fieldNamePrefix) );
 }
 
+void TWordExportParams::addFormtextDataSet(TDataSet* dataSet, const String& fieldNamePrefix)
+{
+    formtextDs.push_back( TWordSingleDataSet(dataSet, fieldNamePrefix) );
+}
 
-
-// Структура для хранения параметров экспорта в DBF
-typedef struct {    // Для описания формата ячеек в Excel
-    String id;
-    String label;
-    //bool fDefault;
-    bool fAllowUnassignedFields;
-    std::vector<DBASEFIELD> Fields;    // Список полей для экспрта в файл DBF
-} EXPORT_PARAMS_DBASE;
 
 
 class TDocumentWriter

@@ -78,6 +78,30 @@ Word DaysInMonth(const TDate dt)
 }
 
 
+
+namespace filetools {
+/* Расширяет путь к файлу FileName из относительного к абсолютному,
+ * используя другой путь FilePath,
+ * но только если путь FileName является относительным
+ * Примечание: В будущем следует перенести в отдельную библиотеку
+ */
+String ExpandFileNameCustom(const String& FileName, const String& FilePath)
+{
+    String result = ExpandFileName(FileName);
+    if (UpperCase(result) != UpperCase(Trim(FileName))) 
+    {
+        result = ExtractFilePath(FilePath) + Trim(FileName);
+    } 
+    else 
+    {
+        result = FileName;
+    }
+    return result;
+}
+}
+
+
+
 namespace tasktools
 {
 
