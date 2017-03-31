@@ -765,6 +765,8 @@ std::vector<String> __fastcall MSWordWorks::MergeDocumentToFiles(Variant Templat
         // Сохраняем документ, без помещения его в список последних файлов (AddToRecentFiles = false - 6й параметр)
         try
         {
+            // Преобразуем все поля в значения
+            UnlinkFields(ResultDocument.OlePropertyGet("Fields"));  // В процессе тестирования с 2017-03-31
             ResultDocument.OleProcedure("SaveAs", filename.c_str(), 0, false, "", false);
         }
         catch (Exception &e)
@@ -1148,13 +1150,13 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* dataSet, Variant D
         int linkedFieldCount = 0;
         for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
         {
-            if ( it->datasetField == NULL )
+            if ( it->dsField == NULL )
             {
-                it->documentField.OleFunction("Select");
+                it->docField.OleFunction("Select");
                 Variant vSelection = WordApp.OlePropertyGet("Selection");
                 Variant vrange = vSelection.OlePropertyGet("Range");
                 //vSelection.OleProcedure("TypeText","hello");
-                vrange.OlePropertySet("Text", ("NA_" + it->fieldName).c_str());
+                vrange.OlePropertySet("Text", ("NA_" + it->docFieldName).c_str());
                 vrange.OlePropertySet("HighlightColorIndex", 7); // wdYellow = 7 ;
             }
             /*else
@@ -1179,12 +1181,12 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* dataSet, Variant D
         int i = 1;
         for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
         {
-            if ( it->datasetField == NULL )
+            if ( it->dsField == NULL )
             {
                 continue;
             }
 
-            mergetable.AddField(i++, it->fieldName);
+            mergetable.AddField(i++, it->dsFieldName);
         }
 
         // Заполняем html таблицу
@@ -1193,14 +1195,14 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* dataSet, Variant D
             int j = 1;
             for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
             {
-                 if ( it->datasetField == NULL )
+                 if ( it->dsField == NULL )
                  {
                         continue;
                  }
 
                  //String FieldName = mergetable.head.GetElement(1, j);
 
-                 mergetable.PutRecord(j++, it->datasetField->AsString);
+                 mergetable.PutRecord(j++, it->dsField->AsString);
             }
             dataSet->Next();
             mergetable.Next();
@@ -1292,34 +1294,32 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
     }
 }
 
-/* Заменяет поля DOCVARIABLE */
-/*void MSWordWorks::ReplaceFormtext(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
-{
-}*/
-
-/* Заменяет поля DOCVARIABLE */
+/* Заменяет поля DOCVARIABLE
+   Сопоставляет поля из DataSet и DOCVARIABLE
+   Создает Variables в соответствии с именами полей DOCVARIABLE
+   Задает значения этих Variables
+   и Обновляет поля DOCVARIABLE
+*/
 void MSWordWorks::ReplaceVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
 {
     Variant fields = Document.OleFunction("Range").OlePropertyGet("Fields");
     std::vector<TFieldLink> links = assignDataSetToRangeFields(fields, DFT_DOCVARIABLE, dataSet, fieldNamePrefix);
 
-    if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)
+    if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)     // Если кол-во сопоставленных полей = 0, то выходим
     {
         return;
     }
 
+    Variant variables = Document.OlePropertyGet("Variables");
     for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
     {
-        if ( it->datasetField == NULL )
+        if ( it->dsField != NULL )
         {
-            continue;
+            Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
+            variable.OlePropertySet("Value", it->dsField->AsString.c_str());
+            it->docField.OleFunction("Update");     // returns True if success
+            it->docField.OleFunction("Unlink");     // returns True if success   // Преобразует поле в значение
         }
-        it->documentField.OlePropertyGet("Result").OlePropertySet("Text", it->datasetField->AsString.c_str());
-
-        //it->documentField.OlePropertyGet("Result").OlePropertySet("Text", dataSet->Fields->FieldByNumber(it->datasetFieldIndex)->AsString.c_str());
-
-        //Variant field = fields.OleFunction("Item", it->documentFieldIndex);
-        //field.OleProcedure("Delete");   // если нужно удалять поля, то цикл сделать в обратном порядке
     }
 }
 
@@ -1336,17 +1336,17 @@ void MSWordWorks::ReplaceImageVariables(Variant Document, TDataSet* dataSet, con
 
     for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
     {
-        if ( it->datasetField == NULL )
+        if ( it->dsField == NULL )
         {
             continue;
         }
 
-        String imagePath = it->datasetField->AsString.c_str();
+        String imagePath = it->dsField->AsString.c_str();
         //String imagePath = dataSet->Fields->FieldByNumber(it->datasetFieldIndex)->AsString.c_str();
         if ( FileExists(imagePath) )
         {
             //Variant field = fields.OleFunction("Item", it->documentFieldIndex);
-            Variant rangeResult = it->documentField.OlePropertyGet("Result");
+            Variant rangeResult = it->docField.OlePropertyGet("Result");
             Variant inlineShape = SetPictureToRange(Document, rangeResult, imagePath);
             //if (imgParam_zOrder == 5)
             ConverInlineShapeToShape(inlineShape, 5);
@@ -1489,16 +1489,14 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
     for (int i = 1; i <= n; i++ )         // цикл по полям в строке
     {
         Variant field = fields.OleFunction("Item", i);
-        String fieldName = getFieldName(field, fieldType);
-
-        //String test = fieldName.SubString(1, prefixLength);
-
+        String docFieldName = getFieldName(field, fieldType); // 2017-03-31
+        String dsFieldName = "";
 
         if ( prefixLength > 0 )
         {
-            if ( fieldName.Length() > prefixLength && fieldName.SubString(1, prefixLength) == fieldNamePrefix)
+            if ( docFieldName.Length() > prefixLength && docFieldName.SubString(1, prefixLength) == fieldNamePrefix)
             {
-                fieldName = fieldName.SubString(prefixLength+1, fieldName.Length() - prefixLength);
+                dsFieldName = docFieldName.SubString(prefixLength+1, docFieldName.Length() - prefixLength);     // 2017-03-31
             }
             else
             {
@@ -1506,20 +1504,20 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
             }
         }
 
-        if (fieldName != "")
+        if (dsFieldName != "")
         {
             // Сопоставляем поле с полем в источнике
             //int fieldIndex = field.OlePropertyGet("Index");   //  Это значение является сквозным значением на весь документ
 
-            TField* fieldOfDataSet = dataSet->Fields->FindField(fieldName);
+            TField* fieldOfDataSet = dataSet->Fields->FindField(dsFieldName);
             if ( fieldOfDataSet )       // Если удалось уйти в dataset
-            {
-                result.push_back(TFieldLink(i, field, fieldOfDataSet->FieldNo, fieldOfDataSet, fieldName));
+            {                          
+                result.push_back(TFieldLink(i, field, docFieldName, fieldOfDataSet->FieldNo, fieldOfDataSet, dsFieldName));
                 //result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
             }
             else
             {
-                result.push_back(TFieldLink(i, field, -1, NULL, fieldName));
+                result.push_back(TFieldLink(i, field, docFieldName, -1, NULL, dsFieldName));
             }
         }
     }
@@ -1532,8 +1530,8 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
    с использованием полей DOCVARIABLE */
 void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const String& fieldNamePrefix)
 {
-    //Variant range = table.OlePropertyGet("Range");
-    Variant fields = table.OlePropertyGet("Range").OlePropertyGet("Fields");
+    Variant tableRange = table.OlePropertyGet("Range");
+    Variant fields = tableRange.OlePropertyGet("Fields");
     std::vector<TFieldLink> links = assignDataSetToRangeFields(fields, 64, dataSet, fieldNamePrefix);
 
     if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)
@@ -1549,35 +1547,46 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
     //selection.OleProcedure("Copy");
 
     // Получаем образец строки
+    // и сохраняем форматированный текст, который будем вставлять в добавляемые строки
     Variant rows = table.OlePropertyGet("Rows");
     Variant rowTemplate = rows.OleFunction("Item", 2);
     Variant formatedText = rowTemplate.OlePropertyGet("Range").OlePropertyGet("FormattedText");
 
-    // Добавляем строку таблицы для позиционирования при вставке
+    // Добавляем пустую строку в конец таблицы для позиционирования при вставке
     // (возможно здесь можно доработать, но сойдет и так. Позже эту строку удалим)
     Variant rowTmp = rows.OleFunction("Add");
 
     int currentRow = 3;
 
+    Variant variables = tableRange.OlePropertyGet("Document").OlePropertyGet("Variables");
+
     while ( !dataSet->Eof ) // Цикл по dataSet
     {
-        // Добавляем новую строку по образцу и получаем список полей
+        // Добавляем новую строку по образцу
+        // в позицию rowTmp. Фактически перед строкой rowTmp (перед последней строкой таблицы).
+        // И получаем список полей
         rowTmp.OlePropertyGet("Range").OlePropertySet("FormattedText" , formatedText );
         Variant fields = rows.OleFunction("Item", currentRow++).OlePropertyGet("Range").OlePropertyGet("Fields");
 
+        fields.OleProcedure("ToggleShowCodes");     // Добавлено для того, чтобы после Update применился формат, указанный в поле DOCVARIABLE
+                                                    // иначе по неизвестной причине формат не применяется
+
         for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
         {
-            if ( it->datasetField == NULL )
+            if ( it->dsField != NULL ) // Если есть присоединенное поле в  dataset, то подставляем значение
             {
-                continue;
-            }
-            //Variant field = fields.OleFunction("Item", it->second);
-            it->documentField.OlePropertyGet("Result").OlePropertySet("Text", it->datasetField->AsString.c_str());
-            //it->documentField.OlePropertyGet("Result").OlePropertySet("Text", dataSet->Fields->FieldByNumber(it->first)->AsString.c_str());
-            //field.OleProcedure("Delete");   // если нужно удалять поля, то цикл сделать в обратном порядке
-        }
-        dataSet->Next();
+                Variant field = fields.OleFunction("Item", it->docFieldIndex );
+                //field.OlePropertyGet("Result").OlePropertySet("Text", it->dsField->AsString.c_str());      // 2017-03-31
 
+                Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
+                variable.OlePropertySet("Value", it->dsField->AsString.c_str());
+                field.OleFunction("Update");
+            }
+
+        }
+        //fields.OleFunction("Unlink");     // Не! делаем преобразование полей в значения в целях оптимизации
+                                            // так как для этого необходим дополнительный цикл с проверкой "была ли замена"
+        dataSet->Next();    // Следующая строка таблицы
     }
 
     // Удаляем вспомогательную строку и строку-образец
@@ -1585,17 +1594,23 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
     rowTemplate.OleProcedure("Delete");
 }
 
+/* Преобразует поля в значения
+*/
+bool MSWordWorks::UnlinkFields(Variant fields)
+{
+    fields.OleFunction("Unlink");
+}
 
 
-
-
-
-
+/*
+    //Variant t = variables.OleFunction("Add", "имя переменной");
+*/
 
 
 
 
 /*
+
 SaveAs2 аналог SaveAs. Между ними сущетсвует небольшое отличие (см. параметр CompatibilityMode)
 
 ActiveDocument.SaveAs2 FileName

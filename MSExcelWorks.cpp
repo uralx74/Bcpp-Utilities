@@ -528,7 +528,7 @@ void __fastcall MSExcelWorks::DateTimeCreateDoc(Variant& wst, int Row, int Col)
 Variant __fastcall MSExcelWorks::WriteToRange(const AnsiString &txt, Variant range, AnsiString format)
 {
     //if (range.IsEmpty())
-    if ( VarIsClear(range))
+    if ( VarIsClear(range) )
     {
         return range;
     }

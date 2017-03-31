@@ -118,13 +118,16 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
     for (std::vector<TWordMergeDataSet>::iterator ds = wordExportParams->mergeDs.begin(); ds != wordExportParams->mergeDs.end(); ds++ )
     {
         std::vector<String> vResults;
-        vResults = msword.ExportToWordFields( *ds, wordDocument, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
+        vResults = msword.ExportToWordFields(*ds, wordDocument, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
         _result.appendResultFiles(vResults);
     }
 
     // Если не было слияния, то сохраняем текущий документ (иначе при файлы с результатом сохраняются в процедуре слияния)
     if (wordExportParams->mergeDs.size() == 0)
     {
+        // Преобразуем все поля в значения
+        msword.UnlinkFields(wordDocument.OlePropertyGet("Fields"));
+        // Сохраняем
         msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename + ".doc");
     }
 

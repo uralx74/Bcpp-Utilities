@@ -105,20 +105,22 @@ typedef std::pair<int, int> TLinkFields;    // dataSetField, wordField
 class TFieldLink
 {
 public:
-    TFieldLink(int docFieldIndex_, Variant documentField_, int datasetFieldIndex_, TField* datasetField_, String fieldName_);
-    int documentFieldIndex;
-    int datasetFieldIndex;
-    String fieldName;
-    TField* datasetField;
-    Variant documentField;
+    TFieldLink(int docFieldIndex_, Variant docField_, String docFieldName_,  int dsFieldIndex_, TField* dsField_, String dsFieldName_);
+    int docFieldIndex;
+    int dsFieldIndex;
+    String dsFieldName;
+    String docFieldName;
+    TField* dsField;
+    Variant docField;
 };
 
-TFieldLink::TFieldLink(int docFieldIndex_, Variant documentField_, int datasetFieldIndex_, TField* datasetField_, String fieldName_):
-    documentFieldIndex(docFieldIndex_),
-    documentField(documentField_),
-    datasetFieldIndex(datasetFieldIndex_),
-    datasetField(datasetField_),
-    fieldName(fieldName_)
+TFieldLink::TFieldLink(int docFieldIndex_, Variant docField_, String docFieldName_, int dsFieldIndex_, TField* dsField_, String dsFieldName_):
+    docFieldIndex(docFieldIndex_),
+    docField(docField_),
+    docFieldName(docFieldName_),
+    dsFieldIndex(dsFieldIndex_),
+    dsField(dsField_),
+    dsFieldName(dsFieldName_)
 {
 }
 
@@ -189,6 +191,7 @@ public:
 
     std::vector<TFieldLink> assignDataSetToRangeFields(Variant fields, TDocFieldType fieldType, TDataSet* dataSet, const String& fieldNamePrefix = "");
     void writeDataSetToTable(Variant table, TDataSet* dataSet, const String& fieldNamePrefix = "");
+    bool UnlinkFields(Variant fields);
 
    	Variant WordApp;
     HWND Handle;
