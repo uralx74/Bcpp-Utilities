@@ -11,8 +11,10 @@
     } else {
         return false;
     }
-//---------------------------------------------------------------------------*/
 
+
+    TLoginForm& instance = TLoginForm::Instance();
+//---------------------------------------------------------------------------*/
 
 #include <vcl.h>
 #pragma hdrstop
@@ -23,63 +25,89 @@
 #pragma link "DBAccess"
 #pragma link "Ora"
 #pragma resource "*.dfm"
-TLoginForm *LoginForm;
 
 const defaul_retry_count = 3;
-//---------------------------------------------------------------------------
-//
-__fastcall TLoginForm::TLoginForm(TComponent* Owner)
+
+/**/
+__fastcall TLoginForm::TLoginForm(TComponent* Owner, TOraSession* const session, bool assignConnect)
     : TForm(Owner),
-    _retryCount(defaul_retry_count)
+    _retryCount(defaul_retry_count),
+    isSessionAssigned(assignConnect)
 {
-    _session = new TOraSession(NULL);
-}
-
-__fastcall TLoginForm::~TLoginForm()
-{
-    delete _session;
-}
-
-//---------------------------------------------------------------------------
-//
-bool __fastcall TLoginForm::Execute(TOraSession* const Session, const String& Username, const String& Password)
-{
-
-    _session->AssignConnect(Session);
+    if ( assignConnect )
+    {
+        _session = new TOraSession(this);
+        _session->AssignConnect(session);
+        _session->Username = "";
+        _session->Password = "";
+    }
+    else
+    {
+        _session = session;
+    }
     _session->Connected = false;
     _session->LoginPrompt = false;
-    if (Username == "")
+}
+
+/**/
+__fastcall TLoginForm::~TLoginForm()
+{
+    /*if (isSessionAssigned)
+    {
+        delete _session;
+    }*/
+}
+
+/**/
+bool __fastcall TLoginForm::execute()
+{
+    //bool loggedon = LoginForm->Execute(Session);
+    //_username = UpperCase(_username);
+    //AddSystemVariable("username", _username);
+
+    if (_session->Username == "")
     {
         this->ShowModal();
     }
     else
     {
-        _session->Username = Username;
-        _session->Password = Password;
+        //_session->Username = Username;
+        //_session->Password = Password;
         try
         {
-            Session->Connect();
-        } catch (...)
+            _session->Connect();
+        }
+        catch (...)
         {
         }
     }
 
-    //Free();
+    // Если удалось подключиться, то получаем список ролей
+    if (_session->Connected)
+    {
+        _rolesQuery = new TOraQuery(this);
+        _rolesQuery->Session = this->_session;
+        _rolesQuery->SQL->Text = "select * from USER_ROLE_PRIVS";
+        _rolesQuery->Open();
+        _rolesQuery->Filtered = true;
+    }
+
     return _session->Connected;
 }
 
+/**/
 String TLoginForm::getUsername()
 {
     return _session->Username;
 }
 
+/**/
 String TLoginForm::getPassword()
 {
     return _session->Password;
 }
 
-//---------------------------------------------------------------------------
-//
+/**/
 void __fastcall TLoginForm::FormShow(TObject *Sender)
 {
     if (UsernameEdit->Text != "")
@@ -92,8 +120,7 @@ void __fastcall TLoginForm::FormShow(TObject *Sender)
     }
 }
 
-//---------------------------------------------------------------------------
-//
+/**/
 void __fastcall TLoginForm::FormCreate(TObject *Sender)
 {
     AppName = "Software\\CES\\" + Application->Title;
@@ -122,9 +149,15 @@ void __fastcall TLoginForm::FormCreate(TObject *Sender)
     }
 }
 
-//---------------------------------------------------------------------------
-//
-void __fastcall TLoginForm::LoginExecute(TObject *Sender)
+/**/
+void __fastcall TLoginForm::cancelAction(TObject *Sender)
+{
+    this->Close();
+}
+
+/* Выполнение попытки авторизоваться
+*/
+void __fastcall TLoginForm::loginAction(TObject *Sender)
 {
     static int TryNumber = 0;
 
@@ -150,22 +183,29 @@ void __fastcall TLoginForm::LoginExecute(TObject *Sender)
         }
         else
         {
-            this->_session = NULL;
+            //this->_session = NULL;
             this->Close();
         }
     }
 }
 
-//---------------------------------------------------------------------------
-// Проверка наличия роли
-bool __fastcall TLoginForm::CheckRole(AnsiString Role)
+/* Проверка наличия роли */
+bool __fastcall TLoginForm::checkRole(const String& role)
 {
-    TOraQuery* Query = new TOraQuery(NULL);
+    if (_rolesQuery != NULL && _rolesQuery->Active )
+    {
+        _rolesQuery->Filter = "GRANTED_ROLE = '" + UpperCase(role) + "'";
+        return _rolesQuery->RecordCount;
+    }
+    else
+    {
+        return false;
+    }
+
+    /*TOraQuery* Query = new TOraQuery(this);
     Query->Session = this->_session;
-    Query->SQL->Text = "SELECT * FROM ALL_TAB_PRIVS WHERE GRANTEE = :P_ROLE";
-
-
-    Query->Params->ParamValues["P_ROLE"] = Role;
+    Query->SQL->Text = "select * from ALL_TAB_PRIVS where GRANTEE = upper(:P_ROLE)";
+    Query->Params->ParamValues["P_ROLE"] = role;
     Query->Open();
 
     bool result = Query->FieldByName("grantee")->AsString != "";
@@ -173,16 +213,15 @@ bool __fastcall TLoginForm::CheckRole(AnsiString Role)
     Query->Close();
     delete Query;
 
-    if (!result)
+    /*if (!result)
     {
         MessageBoxStop("Вы не имеете прав доступа к этой программе. \n\nОтказано в доступе.");
-    }
-
-    return result;
+    } */
+     /*
+    return result;  */
 }
 
-//---------------------------------------------------------------------------
-// Список доступных пользователю ролей
+/* Список доступных пользователю ролей */
 std::vector<AnsiString>* __fastcall TLoginForm::GetUserPriveleges()
 {
 
@@ -207,15 +246,7 @@ std::vector<AnsiString>* __fastcall TLoginForm::GetUserPriveleges()
     return result;
 }
 
-//---------------------------------------------------------------------------
-//
-void __fastcall TLoginForm::CancelExecute(TObject *Sender)
-{
-    this->Close();
-}
-
-//---------------------------------------------------------------------------
-//
+/**/
 void __fastcall TLoginForm::FormClose(TObject *Sender, TCloseAction &Action)
 {
     try
@@ -237,26 +268,28 @@ void __fastcall TLoginForm::FormClose(TObject *Sender, TCloseAction &Action)
     }
     Timer1->Enabled = false;
 }
-//---------------------------------------------------------------------------
-//
+
+/**/
 void __fastcall TLoginForm::Timer1Timer(TObject *Sender)
 {
     KBLayoutPanel->Caption = KeyboardUtil.GetLayout();
 
     //TKeyboardState::GetKeyboardState(VK_CAPITAL);
 
-/*    if (ku.GetKeyboardState()) {
-
-    } else {
-
+    /*if (ku.GetKeyboardState())
+    {
+    }
+    else
+    {
     }*/
 
 }
-//---------------------------------------------------------------------------
 
+/**/
 void __fastcall TLoginForm::KBLayoutPanelClick(TObject *Sender)
 {
     KeyboardUtil.SetNextLayout();
 }
-//---------------------------------------------------------------------------
+
+
 

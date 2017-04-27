@@ -160,7 +160,7 @@ public:
     Variant __fastcall SetPictureToFormField(Variant Document, Variant Field, String PictureFileName, int Width = 0, int Height = 0);
     Variant __fastcall SetPictureToFormField(Variant Document, int fieldIndex, String PictureFileName, int Width = 0, int Height = 0);
     Variant __fastcall SetPictureToFormField(Variant Document, String FieldName, String PictureFileName, int Width = 0, int Height = 0);
-    void __fastcall ConverInlineShapeToShape(Variant inlineShape, int zOrder = 4);
+    Variant __fastcall ConverInlineShapeToShape(Variant inlineShape, int zOrder = 4);
     void __fastcall SetShapePos(Variant shape, int x, int y);
     void __fastcall SetShapeSize(Variant shape, int width, int height);
     std::vector<String> __fastcall GetFormFields(Variant Document);

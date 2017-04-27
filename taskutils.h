@@ -24,23 +24,46 @@
 #define TASKUTILS_H
 
 #include <vector.h>
-#include <MemDS.hpp>
+//#include <MemDS.hpp>
 #include <Classes.hpp>
 #include <Controls.hpp>
 #include <StdCtrls.hpp>
 #include <Forms.hpp>
 #include <ComCtrls.hpp>
 
+
 #include "Messages.h"
+#include <StdCtrls.hpp>
+
+#include <StrUtils.hpp>
+
 
 
 using namespace std;
 
 
+//----------------------------------------------------------------------------
+// Закрывает любой процесс по его PID'у
+bool __fastcall KillProcess(DWORD PID)
+{
+    bool ReturnCode = false;
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, false, PID);
+    if (hProcess != NULL || hProcess != INVALID_HANDLE_VALUE)
+    {
+        if (TerminateProcess(hProcess, -1))
+        {
+            ReturnCode = true;
+        }
+        CloseHandle( hProcess );
+    }
+    return ReturnCode;
+}
+
+
+
 namespace DateUtilsAlt
 {
-//------------------------------------------------------------------------------
-// Год из TDate
+/* Год из TDate */
 Word YearOf(const TDate dt)
 {
     unsigned short dd, mm, yyyy;
@@ -48,8 +71,7 @@ Word YearOf(const TDate dt)
     return yyyy;
 }
 
-//------------------------------------------------------------------------------
-// Месяц из TDate
+/* Месяц из TDate */
 Word MonthOf(const TDate dt)
 {
     unsigned short dd, mm, yyyy;
@@ -57,8 +79,7 @@ Word MonthOf(const TDate dt)
     return mm;
 }
 
-//------------------------------------------------------------------------------
-// День из TDate
+/* День из TDate */
 Word DayOf(const TDate dt)
 {
     unsigned short dd, mm, yyyy;
@@ -66,8 +87,7 @@ Word DayOf(const TDate dt)
     return dd;
 }
 
-//------------------------------------------------------------------------------
-// Количество дней в месяце
+/* Количество дней в месяце */
 Word DaysInMonth(const TDate dt)
 {
     unsigned short dd, mm, yyyy;
@@ -75,6 +95,15 @@ Word DaysInMonth(const TDate dt)
     int leap = IsLeapYear(yyyy) ? 1 : 0;
     return Sysutils::MonthDays[leap][mm - 1];
 }
+
+/**/
+TDateTime __fastcall ReplaceDay(const TDateTime& dt, unsigned short day)
+{
+    unsigned short dd, mm, yyyy;
+    dt.DecodeDate(&yyyy, &mm, &dd);
+    return EncodeDate(yyyy, mm, day);
+}
+
 }
 
 
@@ -101,8 +130,109 @@ String ExpandFileNameCustom(const String& FileName, const String& FilePath)
 }
 
 
+/** Вспомогательные функции для работы с файловой системой
+**/
+namespace fstools
+{
+//------------------------------------------------------------------------------
+//
+void ExploreDirectory(HWND Handle, AnsiString Path)
+{
+	ShellExecute(Handle, "OPEN", Path.c_str(), NULL, NULL, SW_SHOWNORMAL);
+}
 
-namespace tasktools
+void ExploreFile(HWND Handle, AnsiString Path)
+{
+    ShellExecute(Handle, "OPEN", "EXPLORER", ("/select, " + Path).c_str(), NULL ,SW_NORMAL);
+}
+
+
+//----------------------------------------------------------------------------
+// Создает путь к директории назначения
+AnsiString __fastcall CreateWorkDir(AnsiString work_dir)
+{
+    AnsiString tek_kat = ExtractFilePath(Application->ExeName);
+    if (! SetCurrentDir(work_dir))
+    {
+        if (! CreateDir(work_dir))
+        {
+            Application->MessageBox("Ошибка на диске C:\\ !","Операция прервана",MB_ICONSTOP + MB_OK);
+        }
+    }
+    SetCurrentDir(tek_kat);
+    return (tek_kat);
+}
+
+//------------------------------------------------------------------------------
+// Возращает полный путь к временному каталогу пользователя Windows
+String __fastcall GetTempPathEx()
+{
+    const DWORD size = 512;
+    char TempDirectory[size];
+    DWORD Er = GetTempPath(size, TempDirectory);
+
+    if(Er > size || Er == 0)
+    {
+        Er = GetLastError();
+		MessageBoxStop("Error: " + IntToStr(Er));
+        return NULL;
+    }
+    else
+    {
+        return (String)TempDirectory;
+    }
+
+}
+};
+
+
+/**
+*/
+
+namespace vartools
+{
+/* Создает двумерный массив типа varVariant */
+Variant CreateVariantArray(int RowCount, int ColCount)
+{
+    int Bounds[4] = {1, RowCount, 1, ColCount};
+    return VarArrayCreate(Bounds, 3,  varVariant);
+}
+
+/* Создает одномерный массив типа varVariant */
+Variant CreateVariantArray(int RowCount)
+{
+    int Bounds[2] = {1, RowCount};
+    return VarArrayCreate(Bounds, 3,  varVariant);
+}
+
+/* Создает двумерный массив типа varVariant */
+void RedimVariantArray(Variant *DataArray, int RowCount, int ColCount)
+{
+
+    int nSrcRows = VarArrayHighBound(*DataArray, 1);
+    int nSrcCols = VarArrayHighBound(*DataArray, 2);
+
+    Variant ResultArray = CreateVariantArray(RowCount, ColCount);
+    if (RowCount > nSrcRows) RowCount = nSrcRows;
+    if (ColCount > nSrcCols) ColCount = nSrcCols;
+    for (int i = 1; i <= RowCount; i++)
+    {
+        for (int j = 1; j <= ColCount; j++)
+        {
+            ResultArray.PutElement(DataArray->GetElement(i, j), i, j);
+        }
+            //ResultArray[i,j] = DataArray[i,j];
+    }
+
+    VarClear(*DataArray);
+    *DataArray = ResultArray;
+}
+};
+
+/********************
+**/
+
+namespace strtools
 {
 
 enum str_pad_type {STR_PAD_LEFT = 0, STR_PAD_RIGHT};
@@ -122,39 +252,35 @@ typedef struct { //  Структура для использования в функциях ExplodeByBackslash
 } EXPLODESTRING2;
 
 
-
-/*
-//------------------------------------------------------------------------------
-//
-inline int MessageBoxInf(String msg, String title, unsigned short flags = MB_ICONINFORMATION + MB_OK + MB_SYSTEMMODAL + MB_SETFOREGROUND + MB_TOPMOST)
+int PosEx(const String& subString, const String& str, int offset)
 {
-    return(Application->MessageBox(msg.c_str(), title.c_str(), flags));
+    if (subString == "" || str == "" || offset < 1)
+    {
+        return 0;
+    }
+    if (offset == 1)
+    {
+        return str.Pos(subString);
+    }
+    int subStringLength = subString.Length();
+    int segmentStringLength = str.Length() - subStringLength+1;
+    for (; offset <= segmentStringLength; offset++)
+    {
+        if (str[offset] == subString[1])
+        {
+            int i = 1;
+            for (; i < subStringLength && str[offset + i] == subString[1+i]; i++)
+            {}
+            if (i == subStringLength)
+            {
+                return offset;
+            }
+        }
+    }
+    return 0;
 }
 
-//------------------------------------------------------------------------------
-// Сообщение MB_ICONINFORMATION
-inline int MessageBoxInf(String msg, unsigned short flags = MB_ICONINFORMATION + MB_OK + MB_SYSTEMMODAL + MB_SETFOREGROUND + MB_TOPMOST)
-{
-    return(Application->MessageBox(msg.c_str(), Application->Title.c_str(), flags));
-}
-
-//------------------------------------------------------------------------------
-// Сообщение MB_ICONQUESTION
-inline int MessageBoxQuestion(String msg, unsigned short flags = MB_ICONQUESTION + MB_YESNO + MB_SYSTEMMODAL + MB_SETFOREGROUND + MB_TOPMOST)
-{
-    return(Application->MessageBox(msg.c_str(), Application->Title.c_str(), flags));
-}
-
-//------------------------------------------------------------------------------
-// Сообщение MB_ICONSTOP
-inline int MessageBoxStop(String msg, unsigned short flags = MB_ICONSTOP + MB_OK + MB_SYSTEMMODAL + MB_SETFOREGROUND + MB_TOPMOST)
-{
-    return(Application->MessageBox(msg.c_str(), Application->Title.c_str(), flags));
-}*/
-
-
-//---------------------------------------------------------------------------
-// Дополнить строку справа
+/* Дополнить строку справа */
 String StrPadR(String Str, int Length, String Symb)
 {
     while (Str.Length() < Length)
@@ -164,8 +290,7 @@ String StrPadR(String Str, int Length, String Symb)
     return Str;
 }
 
-//---------------------------------------------------------------------------
-// Дополнить строку слева
+/* Дополнить строку слева */
 String StrPadL(String Str, int Length, String Symb)
 {
     while (Str.Length() < Length)
@@ -175,108 +300,36 @@ String StrPadL(String Str, int Length, String Symb)
     return Str;
 }
 
-
+/*  */
 String getStrParamValue(const String& str, const String& blockName, const String& paramName)
 {
            // String blockName = "IMG";
-            //String paramName = "ZORDER";
-            String paramValue = "";
-            int p0 = str.Pos("[" + blockName);
+    //String paramName = "ZORDER";
+    String paramValue = "";
+    int p0 = str.Pos("[" + blockName);
 
-            if (p0 >= 0)
-            {
-                int p1 = PosEx(paramName, str, PosEx(paramName, str, p0));
-                if (p1 > 0)
-                {
-                    p1 = PosEx("=", str, p1 + paramName.Length());
-                    p1 = PosEx("\"", str, p1 + 1);
-                }
-                if (p1 > 0)
-                {
-                    p1 = p1 + 1;
-                    //int offset = p1+1;
-                    int p2 = PosEx("\"", str, p1);
-                    paramValue = str.SubString(p1, p2-p1);
-                }
-            }
+    if (p0 >= 0)
+    {
+        int p1 = PosEx(paramName, str, PosEx(paramName, str, p0));
+        if (p1 > 0)
+        {
+            p1 = PosEx("=", str, p1 + paramName.Length());
+            p1 = PosEx("\"", str, p1 + 1);
+        }
+        if (p1 > 0)
+        {
+            p1 = p1 + 1;
+            //int offset = p1+1;
+            int p2 = PosEx("\"", str, p1);
+            paramValue = str.SubString(p1, p2-p1);
+        }
+    }
 	return paramValue;
 
 }
-//------------------------------------------------------------------------------
-//
-void ExploreDirectory(HWND Handle, AnsiString Path)
-{
-	ShellExecute(Handle, "OPEN", Path.c_str(), NULL, NULL, SW_SHOWNORMAL);
-}
-
-void ExploreFile(HWND Handle, AnsiString Path)
-{
-    ShellExecute(Handle, "OPEN", "EXPLORER", ("/select, " + Path).c_str(), NULL ,SW_NORMAL);
-}
 
 
-//------------------------------------------------------------------------------
-// Создание массива типа varVariant
-Variant CreateVariantArray(int RowCount, int ColCount)
-{
-    int Bounds[4] = {1, RowCount, 1, ColCount};
-    return VarArrayCreate(Bounds, 3,  varVariant);
-}
-
-//------------------------------------------------------------------------------
-// Создание массива типа varVariant
-Variant CreateVariantArray(int RowCount)
-{
-    int Bounds[2] = {1, RowCount};
-    return VarArrayCreate(Bounds, 3,  varVariant);
-}
-
-TDateTime __fastcall ReplaceDay(const TDateTime& dt, unsigned short day)
-{
-    unsigned short dd, mm, yyyy;
-    dt.DecodeDate(&yyyy, &mm, &dd);
-    return EncodeDate(yyyy, mm, day);
-}
-
-//------------------------------------------------------------------------------
-// Создание массива типа varVariant
-void RedimVariantArray(Variant *DataArray, int RowCount, int ColCount)
-{
-
-    int nSrcRows = VarArrayHighBound(*DataArray, 1);
-    int nSrcCols = VarArrayHighBound(*DataArray, 2);
-
-    Variant ResultArray = CreateVariantArray(RowCount, ColCount);
-    if (RowCount > nSrcRows) RowCount = nSrcRows;
-    if (ColCount > nSrcCols) ColCount = nSrcCols;
-    for (int i = 1; i <= RowCount; i++)
-        for (int j = 1; j <= ColCount; j++)
-            ResultArray.PutElement(DataArray->GetElement(i, j), i, j);
-            //ResultArray[i,j] = DataArray[i,j];
-
-    VarClear(*DataArray);
-    *DataArray = ResultArray;
-}
-
-/*//------------------------------------------------------------------------------
-// Объединяет вектор подстрок в одну строку используя соединитель
-string Implode(const vector<string> &pieces, const string &glue = "")
-{
-	string a;
-	int leng=pieces.size();
- 	for(int i=0; i<leng; i++)
- 	{
- 		a+= pieces[i];
- 		if (  i < (leng-1) )
- 			a+= glue;
- 	}
- 	return a;
-}     */
-
-
-
-//------------------------------------------------------------------------------
-// Объединяет вектор подстрок в одну строку используя соединитель
+/* Объединяет вектор подстрок в одну строку используя соединитель */
 String MergeStr(const String& s1, const String& s2, const String &glue = "")
 {
 	
@@ -291,49 +344,53 @@ String MergeStr(const String& s1, const String& s2, const String &glue = "")
 }
 
 
-//------------------------------------------------------------------------------
-// Объединяет вектор подстрок в одну строку используя соединитель
-AnsiString Implode(const vector<AnsiString> &pieces, const AnsiString &glue = "")
+/* Объединяет вектор подстрок в одну строку используя соединитель */
+AnsiString Implode(const vector<String> &pieces, const String &glue = "")
 {
 	AnsiString a;
-	int leng=pieces.size();
- 	for(int i=0; i<leng; i++)
+	int leng = pieces.size();
+ 	for(int i=0; i < leng; i++)
  	{
- 		a+= pieces[i];
+ 		a += pieces[i];
  		if (  i < (leng-1) )
- 			a+= glue;
+        {
+ 			a += glue;
+        }
  	}
  	return a;
 }
 
 
-//------------------------------------------------------------------------------
-// Объединяет вектор подстрок в одну строку используя соединитель
-// Учитываются только элементы не равные пустой строке
+/* Объединяет вектор подстрок в одну строку используя соединитель
+   Учитываются только элементы не равные пустой строке
+*/
 AnsiString ImplodeNvl(const vector<AnsiString> &pieces, const AnsiString &glue = "")
 {
 	AnsiString result;
-	int leng=pieces.size();
- 	for(int i=0; i<leng; i++)
+	int leng = pieces.size();
+ 	for(int i = 0; i < leng; i++)
  	{
         if (pieces[i] == "")
+        {
             continue;
+        }
         if (result != "")
+        {
             result += glue;
- 		result+= pieces[i];
+        }
+ 		result += pieces[i];
  	}
  	return result;
 }
 
-//------------------------------------------------------------------------------
-// Добавляет в вектор только не пустые значения
+/* Добавляет в вектор только не пустые значения */
 void PushBackNvl(vector<AnsiString> &v, AnsiString value)
 {
     if (value != "")
         v.push_back(value);
 }
-//------------------------------------------------------------------------------
-// Объединяет вектор подстрок в одну строку используя соединитель
+
+/* Объединяет вектор подстрок в одну строку используя соединитель */
 AnsiString Implode(const vector<EXPLODESTRING> &pieces, const AnsiString &glue = "")
 {
 	AnsiString a;
@@ -498,7 +555,7 @@ vector<string> ExplodeByBackslash(string str, string separatorstart, string sepa
 //------------------------------------------------------------------------------
 // Разбивает строку на вектор строк используя для разбиения указанные подстроки-маркеры начала и конца
 // Расширенная версия функции ExplodeByBackslash
-vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separatorstart, AnsiString separatorend, bool addEmpty = true)
+vector<EXPLODESTRING2> ExplodeByBackslash2(const String& str, AnsiString separatorstart, AnsiString separatorend, bool addEmpty = true)
 {
     //str = "_date(0,(0),0,0,'mm.yyyy')";
 
@@ -554,7 +611,7 @@ vector<EXPLODESTRING2> ExplodeByBackslash2(AnsiString str, AnsiString separators
 
 //------------------------------------------------------------------------------
 // Разбивает строку на вектор строк используя для разбиения указанные подстроки-маркеры начала и конца
-vector<EXPLODESTRING> ExplodeByBackslash(AnsiString str, AnsiString separatorstart, AnsiString separatorend, bool addEmpty = true)
+vector<EXPLODESTRING> ExplodeByBackslash(const String& str, AnsiString separatorstart, AnsiString separatorend, bool addEmpty = true)
 {
 	vector<EXPLODESTRING> result;
  	int found_start;
@@ -818,59 +875,11 @@ bool IsInt(String str)
     return true;
 }
 
-//----------------------------------------------------------------------------
-// Закрывает любой процесс по его PID'у
-bool __fastcall KillProcess(DWORD PID)
-{
-    bool ReturnCode = false;
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, false, PID);
-    if (hProcess != NULL || hProcess != INVALID_HANDLE_VALUE)
-    {
-        if (TerminateProcess(hProcess, -1))
-        {
-            ReturnCode = true;
-        }
-        CloseHandle( hProcess );
-    }
-    return ReturnCode;
-}
+};
 
-//----------------------------------------------------------------------------
-// Создает путь к директории назначения
-AnsiString __fastcall CreateWorkDir(AnsiString work_dir)
-{
-    AnsiString tek_kat = ExtractFilePath(Application->ExeName);
-    if (! SetCurrentDir(work_dir))
-    {
-        if (! CreateDir(work_dir))
-        {
-            Application->MessageBox("Ошибка на диске C:\\ !","Операция прервана",MB_ICONSTOP + MB_OK);
-        }
-    }
-    SetCurrentDir(tek_kat);
-    return (tek_kat);
-}
-}; // tasktools namespace
-//------------------------------------------------------------------------------
-// Возращает полный путь к временному каталогу пользователя Windows
-AnsiString __fastcall GetTempPath()
-{
-    const DWORD size = 512;
-    char TempDirectory[size];
-    DWORD Er = GetTempPath(size, TempDirectory);
 
-    if(Er > size || Er == 0)
-    {
-        Er=GetLastError();
-		MessageBoxStop("Error: " + IntToStr(Er));
-        return NULL;
-    }
-    else
-    {
-        return (AnsiString)TempDirectory;
-    }
 
-}
+
 
 //------------------------------------------------------------------------------
 //

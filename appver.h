@@ -139,9 +139,11 @@ const unsigned char completeBuild[] =
     '\0'
 };
 
-const AnsiString AppVersion = AnsiString((char *)completeVersion);
-const AnsiString AppBuild = AnsiString((char *)completeBuild);
-const AnsiString AppFullVersion = AppVersion + "." + AppBuild;
-const AnsiString AppFullVersionTitle = AppVersion + " (" + AppBuild + ")";
-
+namespace AppVer
+{
+    const AnsiString Version = AnsiString((char *)completeVersion);
+    const AnsiString Build = AnsiString((char *)completeBuild);
+    const AnsiString FullVersion = Version + "." + Build;
+    const AnsiString FullVersionTitle = Version + " (" + Build + ")";
+}
 #endif // BUILD_DEFS_H

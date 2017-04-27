@@ -12,7 +12,7 @@ object LoginForm: TLoginForm
   Font.Name = 'MS Sans Serif'
   Font.Style = []
   OldCreateOrder = False
-  Position = poDesktopCenter
+  Position = poOwnerFormCenter
   OnClose = FormClose
   OnCreate = FormCreate
   OnShow = FormShow
@@ -556,15 +556,6 @@ object LoginForm: TLoginForm
       0FFFFFFFFFF01E003FFFFFFFFFF80000FFFFFFFFFFFC0007FFFFFFFFFFFFC0FF
       FFFFFFFF}
   end
-  object LoginBtn: TBitBtn
-    Left = 112
-    Top = 112
-    Width = 97
-    Height = 25
-    Action = Login
-    Caption = #1042#1086#1081#1090#1080
-    TabOrder = 1
-  end
   object CancelBtn: TBitBtn
     Left = 224
     Top = 112
@@ -574,7 +565,7 @@ object LoginForm: TLoginForm
     Cancel = True
     Caption = #1054#1090#1084#1077#1085#1072
     ModalResult = 2
-    TabOrder = 2
+    TabOrder = 1
   end
   object GroupBox1: TGroupBox
     Left = 112
@@ -634,18 +625,27 @@ object LoginForm: TLoginForm
       OnClick = KBLayoutPanelClick
     end
   end
+  object LoginBtn: TBitBtn
+    Left = 112
+    Top = 112
+    Width = 97
+    Height = 25
+    Action = Login
+    Caption = #1042#1086#1081#1090#1080
+    TabOrder = 2
+  end
   object ActionList1: TActionList
     Left = 56
     Top = 120
     object Login: TAction
       Caption = #1042#1086#1081#1090#1080
       ShortCut = 13
-      OnExecute = LoginExecute
+      OnExecute = loginAction
     end
     object Cancel: TAction
       Caption = #1054#1090#1084#1077#1085#1072
       ShortCut = 27
-      OnExecute = CancelExecute
+      OnExecute = cancelAction
     end
   end
   object Timer1: TTimer

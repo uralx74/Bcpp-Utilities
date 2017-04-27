@@ -1,7 +1,9 @@
 #include "MSWordWorks.h"
 #include <cassert>
 
-using namespace tasktools;
+using namespace strtools;
+using namespace vartools;
+using namespace fstools;
 //---------------------------------------------------------------------------
 //
 MergeTable::MergeTable()
@@ -417,13 +419,27 @@ void __fastcall MSWordWorks::SetTextToField(Variant Document, String FieldName, 
    4 - перед текстом
    5 - за текстом
 */
-void __fastcall MSWordWorks::ConverInlineShapeToShape(Variant inlineShape, int zOrder)
+Variant __fastcall MSWordWorks::ConverInlineShapeToShape(Variant inlineShape, int zOrder)
 {
     // Конвертируем в Shape
     Variant shape = inlineShape.OleFunction("ConvertToShape");
 
     // Расположение изображения перед текстом
-    shape.OleFunction("ZOrder", zOrder);
+    shape.OleFunction("ZOrder", zOrder);  // 4 - msoBringInFrontOfText
+
+    // Сохранять пропорции
+    shape.OlePropertySet("LockAspectRatio", true);
+
+    // Выравнивание по вертикали по центру строки
+    shape.OlePropertySet("Top", -999995);    // wdShapeCenter = -999995
+
+    // Выравнивание относительно
+    shape.OlePropertySet("RelativeVerticalPosition", 3); //  wdRelativeVerticalPositionLine = 3
+
+    //
+    //WrapFormat.AllowOverlap = True
+
+    return shape;
 }
 
 /* Задает размеры плавающего shape */
@@ -442,8 +458,8 @@ void __fastcall MSWordWorks::SetShapeSize(Variant shape, int width, int height)
 void __fastcall MSWordWorks::SetShapePos(Variant shape, int x, int y)
 {
     // Устанавливаем расположение на листе
-    shape.OleFunction("IncrementLeft", x);
-    shape.OleFunction("IncrementTop", y);
+    shape.OleProcedure("IncrementLeft", x);
+    shape.OleProcedure("IncrementTop", y);
 }
 
 /* Устанавливает картинку на место Range
@@ -790,7 +806,7 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, MERGETAB
     randomize();
     AnsiString TmpFileName = "ds" + IntToStr(random(100000000)) + ".html";
 
-    TmpFileName = GetTempPath() + TmpFileName;
+    TmpFileName = GetTempPathEx() + TmpFileName;
 
     //int ArrayRowsCount = md.RecCount;
 
@@ -963,7 +979,7 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, const Va
 {
     randomize();
     AnsiString TmpFileName = "ds" + IntToStr(random(100000000)) + ".html";
-    TmpFileName = GetTempPath() + TmpFileName;
+    TmpFileName = GetTempPathEx() + TmpFileName;
 
 
     int ArrayRowsCount = VarArrayHighBound(ArrayData, 1) - VarArrayLowBound(ArrayData, 1)+1;
@@ -1147,6 +1163,7 @@ std::vector<String> MSWordWorks::ExportToWordFields(TDataSet* dataSet, Variant D
         Variant fields = Document.OleFunction("Range").OlePropertyGet("Fields");
         std::vector<TFieldLink> links = assignDataSetToRangeFields(fields, DFT_MERGEFIELD, dataSet, "");
 
+        // Вместо не найденных полей вставляем замещающий текст
         int linkedFieldCount = 0;
         for (std::vector<TFieldLink>::iterator it = links.begin(); it != links.end(); it++)
         {
@@ -1315,9 +1332,12 @@ void MSWordWorks::ReplaceVariables(Variant Document, TDataSet* dataSet, const St
     {
         if ( it->dsField != NULL )
         {
-            Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
-            variable.OlePropertySet("Value", it->dsField->AsString.c_str());
-            it->docField.OleFunction("Update");     // returns True if success
+            if (it->dsField->AsString != "")    // Чтобы не появлялось сообщение "Ошибка! Переменная документа не указана."
+            {
+                Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
+                variable.OlePropertySet("Value", (OleVariant)it->dsField->AsString);
+                it->docField.OleFunction("Update");     // returns True if success
+            }
             it->docField.OleFunction("Unlink");     // returns True if success   // Преобразует поле в значение
         }
     }
@@ -1345,14 +1365,13 @@ void MSWordWorks::ReplaceImageVariables(Variant Document, TDataSet* dataSet, con
         //String imagePath = dataSet->Fields->FieldByNumber(it->datasetFieldIndex)->AsString.c_str();
         if ( FileExists(imagePath) )
         {
-            //Variant field = fields.OleFunction("Item", it->documentFieldIndex);
             Variant rangeResult = it->docField.OlePropertyGet("Result");
             Variant inlineShape = SetPictureToRange(Document, rangeResult, imagePath);
             //if (imgParam_zOrder == 5)
             ConverInlineShapeToShape(inlineShape, 5);
+            it->docField.OleProcedure("Delete");
         }
-        //field.OleProcedure("Delete");   // если нужно удалять поля, то цикл сделать в обратном порядке
-    } 
+    }
 }
 
 /*
@@ -1492,6 +1511,8 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
         String docFieldName = getFieldName(field, fieldType); // 2017-03-31
         String dsFieldName = "";
 
+        // Определяем имя поля для поиска в dataSet
+        // с учетом возможного использования префикса и без
         if ( prefixLength > 0 )
         {
             if ( docFieldName.Length() > prefixLength && docFieldName.SubString(1, prefixLength) == fieldNamePrefix)
@@ -1502,6 +1523,10 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
             {
                 continue;
             }
+        }
+        else
+        {
+            dsFieldName = docFieldName;
         }
 
         if (dsFieldName != "")

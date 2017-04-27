@@ -1,6 +1,6 @@
 #include "MSExcelWorks.h"
 
-using namespace tasktools;
+using namespace strtools;
 //----------------------------------------------------------------------------
 // Сохраняет книгу в файл
 void __fastcall MSExcelWorks::SaveDocument(Variant& workbook, const AnsiString& FileName)
@@ -755,7 +755,7 @@ Variant __fastcall MSExcelWorks::OpenDocument(AnsiString TemplateName)
   	    }
         catch (Exception &e)
         {
-            throw Exception("Ошибка при открытии файла: " + TemplateName + ".");
+            throw Exception("Ошибка при открытии файла: " + TemplateName + "." + e.Message);
         }
     }
     else                       // Создать новый документ
