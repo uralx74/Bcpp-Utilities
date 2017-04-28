@@ -140,6 +140,7 @@ private:
 public:
     String getFieldName(Variant field, int fieldType = 0);
     void __fastcall SetDisplayAlerts(bool flg = true);
+    void __fastcall OptimizePerformance(bool flg = true);
     Variant __fastcall OpenWord();
     Variant __fastcall OpenWord(const String &DocumentFileName, bool fAsTemplate = true);   // Оставлена для совместимости со старыми версиями программ. Убрать в дальнейшем.
     Variant __fastcall OpenDocument(const String &DocumentFileName, bool fAsTemplate = true);
@@ -191,7 +192,8 @@ public:
 
     std::vector<TFieldLink> assignDataSetToRangeFields(Variant fields, TDocFieldType fieldType, TDataSet* dataSet, const String& fieldNamePrefix = "");
     void writeDataSetToTable(Variant table, TDataSet* dataSet, const String& fieldNamePrefix = "");
-    bool UnlinkFields(Variant fields);
+    void MSWordWorks::updateFields(Variant fields, int fieldType);
+    void UnlinkFields(Variant fields);
 
    	Variant WordApp;
     HWND Handle;

@@ -108,6 +108,13 @@ void __fastcall MSWordWorks::SetDisplayAlerts(bool flg)
 }
 
 
+void __fastcall MSWordWorks::OptimizePerformance(bool flg)
+{
+    /*wdDoc.ActiveWindow.View.Type = wd.WdViewType.wdNormalView;
+    wdApp.Options.Pagination = false;*/
+    WordApp.OlePropertySet("ScreenUpdating", flg);
+}
+
 //---------------------------------------------------------------------------
 // ќтрыть документ Word
 Variant __fastcall MSWordWorks::OpenWord()
@@ -1433,6 +1440,11 @@ String MSWordWorks::getFieldName(Variant field, int fieldType)
         fieldDescr = "MERGEFIELD";
         break;
     }
+    case 34:
+    {
+        fieldDescr = "FUNCTION";
+        break;
+    }
     default:
     {
         return String("");
@@ -1500,8 +1512,6 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
     std::vector<TFieldLink> result;
     result.reserve(dataSet->FieldCount);
 
-    //Variant fields = range.OlePropertyGet("Fields");
-
     int n = fields.OlePropertyGet("Count");
     int prefixLength = fieldNamePrefix.Length();
 
@@ -1509,6 +1519,10 @@ std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, 
     {
         Variant field = fields.OleFunction("Item", i);
         String docFieldName = getFieldName(field, fieldType); // 2017-03-31
+        if (docFieldName == "")     // ≈сли поле указанного типа не найдено (не определено им€)
+        {
+            continue;
+        }
         String dsFieldName = "";
 
         // ќпредел€ем им€ пол€ дл€ поиска в dataSet
@@ -1577,21 +1591,41 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
     Variant rowTemplate = rows.OleFunction("Item", 2);
     Variant formatedText = rowTemplate.OlePropertyGet("Range").OlePropertyGet("FormattedText");
 
+    int rowCount = rows.OlePropertyGet("Count");
+    int footerRowCount = rowCount - 2;
+
+    // ѕолучаем доступ к переменны документа
+    Variant variables = tableRange.OlePropertyGet("Document").OlePropertyGet("Variables");
+
+
     // ƒобавл€ем пустую строку в конец таблицы дл€ позиционировани€ при вставке
     // (возможно здесь можно доработать, но сойдет и так. ѕозже эту строку удалим)
-    Variant rowTmp = rows.OleFunction("Add");
-
+    // или назначаем строкой дл€ позиционировани€ строку итогов (подвал таблицы)
+    Variant rowTmp;     // —трока дл€ позиционировани€
     int currentRow = 3;
 
-    Variant variables = tableRange.OlePropertyGet("Document").OlePropertyGet("Variables");
+    if (footerRowCount > 0)
+    {
+        rowTmp = rows.OleFunction("Item", 3);
+    }
+    else
+    {
+        rowTmp = rows.OleFunction("Add");
+    }
+
+
+    //currentRow--;
 
     while ( !dataSet->Eof ) // ÷икл по dataSet
     {
         // ƒобавл€ем новую строку по образцу
         // в позицию rowTmp. ‘актически перед строкой rowTmp (перед последней строкой таблицы).
-        // » получаем список полей
+        // » получаем список полей в этой строке
+        //rowTmp.OlePropertyGet("Range").OlePropertyGet("FormattedText").OlePropertySet("FormattedText" , formatedText );
+
         rowTmp.OlePropertyGet("Range").OlePropertySet("FormattedText" , formatedText );
-        Variant fields = rows.OleFunction("Item", currentRow++).OlePropertyGet("Range").OlePropertyGet("Fields");
+
+        Variant fields = rows.OleFunction("Item", currentRow).OlePropertyGet("Range").OlePropertyGet("Fields");
 
         fields.OleProcedure("ToggleShowCodes");     // ƒобавлено дл€ того, чтобы после Update применилс€ формат, указанный в поле DOCVARIABLE
                                                     // иначе по неизвестной причине формат не примен€етс€
@@ -1601,8 +1635,6 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
             if ( it->dsField != NULL ) // ≈сли есть присоединенное поле в  dataset, то подставл€ем значение
             {
                 Variant field = fields.OleFunction("Item", it->docFieldIndex );
-                //field.OlePropertyGet("Result").OlePropertySet("Text", it->dsField->AsString.c_str());      // 2017-03-31
-
                 Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
                 variable.OlePropertySet("Value", it->dsField->AsString.c_str());
                 field.OleFunction("Update");
@@ -1612,16 +1644,48 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
         //fields.OleFunction("Unlink");     // Ќе! делаем преобразование полей в значени€ в цел€х оптимизации
                                             // так как дл€ этого необходим дополнительный цикл с проверкой "была ли замена"
         dataSet->Next();    // —ледующа€ строка таблицы
+        currentRow++;
     }
 
-    // ”дал€ем вспомогательную строку и строку-образец
-    rowTmp.OleProcedure("Delete");
+    // ≈сли у таблицы есть подвал
+    if (footerRowCount > 0)
+    {
+        // ќбновл€ем значени€ полей в строке итогов
+        Variant fields = rowTmp.OlePropertyGet("Range").OlePropertyGet("Fields");
+        updateFields(fields, 34);
+    }
+    else
+    {
+        // ”дал€ем вспомогательную строку дл€ позиционировани€
+        rowTmp.OleProcedure("Delete");
+    }
+
+    // ”дал€ем строку-шаблон
     rowTemplate.OleProcedure("Delete");
+
 }
+
+
+/* ќбновл€ет значени€ в пол€х определенного типа
+*/
+void MSWordWorks::updateFields(Variant fields, int fieldType)
+{
+    int n = fields.OlePropertyGet("Count");
+
+    for (int i = 1; i <= n; i++ )         // цикл по пол€м в строке
+    {
+        Variant field = fields.OleFunction("Item", i);
+        if (field.OlePropertyGet("Type") == fieldType)
+        {
+            field.OleFunction("Update");
+        }
+    }
+}
+
 
 /* ѕреобразует пол€ в значени€
 */
-bool MSWordWorks::UnlinkFields(Variant fields)
+void MSWordWorks::UnlinkFields(Variant fields)
 {
     fields.OleFunction("Unlink");
 }
@@ -1983,3 +2047,5 @@ Bibliography field.
 wdFieldCitation
 96
 Citation field.*/
+
+//rowTmp.OlePropertyGet("Range").OleProcedure("Collapse", 0); /*wdCollapseEnd   */

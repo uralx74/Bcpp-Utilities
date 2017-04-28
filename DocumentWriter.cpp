@@ -59,6 +59,11 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         msword.SetVisible(true);
         msword.SetDisplayAlerts(true);
         #endif
+        #ifndef _DEBUG
+        msword.OptimizePerformance(true);
+        #endif
+
+
 
         wordDocument =  msword.OpenDocument(wordExportParams->templateFilename, false);
     }
