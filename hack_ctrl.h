@@ -1,8 +1,17 @@
 #ifndef HACK_CTRL
 #define HACK_CTRL
 
+/*
+hack_ctrl.h
+author: vsovchinnikov
+e-mail: utnpsys@gmail.com
+*/
+
 #include <Classes.hpp>
 #include <Controls.hpp>
+
+namespace HackCtrl
+{
 
 /* Меняет флаг Enabled дочерних элементов управления
 */
@@ -16,7 +25,7 @@ void switchEnabledGroupBox(TGroupBox* groupBox)
     }
 }
 
-/* Выравнивает элеметы управления в правильном порядке */
+/* Выравнивает элеметы управления в правильном порядке (в порядке их создания)*/
 void __fastcall RealignControls(TWinControl *parent)
 {
     TControl *c;
@@ -52,5 +61,23 @@ void __fastcall RealignControls(TWinControl *parent)
     }
 }
 
+/* Возвращет индекс видимой вкладки */
+int PageIndexFromTabIndex(TPageControl* pageControl, int tabIndex)
+{
+    int visiblePageCount = 0;
+    for (int i = 0; i <= pageControl->PageCount; i++)
+    {
+        if ( pageControl->Pages[i]->TabVisible )
+        {
+            visiblePageCount++;
+        }
+        if (visiblePageCount > tabIndex)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
 
+}
 #endif

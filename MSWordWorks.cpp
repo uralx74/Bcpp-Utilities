@@ -1011,7 +1011,9 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, const Va
     if (PagePerDocument <= 0)
     {
         PagePerDocument = ArrayRowsCount - FirstRecordIndex + 1;
-    } else if (PagePerDocument >= delta) {
+    } 
+    else if (PagePerDocument >= delta) 
+    {
         PagePerDocument = delta;
     }
 

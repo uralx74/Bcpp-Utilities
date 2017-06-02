@@ -106,6 +106,24 @@ TDateTime __fastcall ReplaceDay(const TDateTime& dt, unsigned short day)
 
 }
 
+namespace popupmenutools
+{
+/* Возвращает true, если в меню есть хоть один отображаемый элемент*/
+bool PopupMenuVisibleConsists(TPopupMenu* popupMenu)
+{
+    bool visible = false;
+    for (int i = 0; i < popupMenu->Items[0].Count; i++)
+    {
+        if ( popupMenu->Items[0].Items[i]->Visible && !popupMenu->Items[0].Items[i]->IsLine() )
+        {
+            visible = true;
+            break;
+        }
+    }
+    return visible;
+}
+}
+
 
 
 namespace filetools {

@@ -54,6 +54,7 @@ void __fastcall MSExcelWorks::SetAutoFilter(Variant& range)
 // Расширяет столбцы таблицы по содержимому
 void __fastcall MSExcelWorks::SetColumnsAutofit(Variant& range)
 {
+    //range.OlePropertyGet("EntireColumn").OleProcedure("AutoFit");     // При необходимости сделать отдельную функцию!
     range.OlePropertyGet("Columns").OleProcedure("AutoFit");
 }
 
@@ -68,6 +69,7 @@ void __fastcall MSExcelWorks::SetColumnWidth(Variant& worksheet, int ColumnIndex
 // Расширяет строки таблицы по содержимому
 void __fastcall MSExcelWorks::SetRowsAutofit(Variant& range)
 {
+    //range.OlePropertyGet("EntireRow").OleProcedure("AutoFit"); // При необходимости сделать отдельную функцию!
     range.OlePropertyGet("Rows").OleProcedure("AutoFit");
 }
 
@@ -319,7 +321,7 @@ void __fastcall MSExcelWorks::SetRangeDataFormat(Variant& range, AnsiString& for
 
 //----------------------------------------------------------------------------
 // Задает формат ячеек в Range заданной координатами
-void __fastcall MSExcelWorks::SetRangeFormat(Variant& range,  const CellFormat& cf, int firstRow, int firstCol, int countRow, int countCol)
+void __fastcall MSExcelWorks::SetRangeFormat(Variant& range,  const TCellFormat& cf, int firstRow, int firstCol, int countRow, int countCol)
 {
 	// формирование диапазона range
     //Variant cell_left_top = range.OlePropertyGet("Cells", firstRow, firstCol);
@@ -332,7 +334,7 @@ void __fastcall MSExcelWorks::SetRangeFormat(Variant& range,  const CellFormat& 
 
 //----------------------------------------------------------------------------
 // Задает формат ячеек в Range
-void __fastcall MSExcelWorks::SetRangeFormat(Variant& range, const CellFormat& cf)
+void __fastcall MSExcelWorks::SetRangeFormat(Variant& range, const TCellFormat& cf)
 {
     if (cf.DataFormat != "")    // "m/d/yyyy" "@" "0.00" "General"
     {
@@ -364,7 +366,7 @@ void __fastcall MSExcelWorks::SetRangeFormat(Variant& range, const CellFormat& c
     }
 
     Variant font = range.OlePropertyGet("Font");
-    if (cf.FontStyle.Contains(CellFormat::fsNormal))
+    if (cf.FontStyle.Contains(TCellFormat::fsNormal))
     {
         font.OlePropertySet("Bold", false);
         font.OlePropertySet("Italic", false);
@@ -372,15 +374,15 @@ void __fastcall MSExcelWorks::SetRangeFormat(Variant& range, const CellFormat& c
     }
     else
     {
-        if (cf.FontStyle.Contains(CellFormat::fsBold))
+        if (cf.FontStyle.Contains(TCellFormat::fsBold))
         {
             font.OlePropertySet("Bold", true);
         }
-        if (cf.FontStyle.Contains(CellFormat::fsItalic))
+        if (cf.FontStyle.Contains(TCellFormat::fsItalic))
         {
             font.OlePropertySet("Italic", true);
         }
-        if (cf.FontStyle.Contains(CellFormat::fsUnderline))
+        if (cf.FontStyle.Contains(TCellFormat::fsUnderline))
         {
             font.OlePropertySet("Underline", true);
         }
@@ -407,7 +409,7 @@ void __fastcall MSExcelWorks::SetRangeFormat(Variant& range, const CellFormat& c
     if (cf.BorderStyle >= 0) {
         Variant borders = range.OlePropertyGet("Borders");
         //borders.OlePropertySet("LineStyle", cf.BorderStyle);
-        for (int i = CellFormat::xlEdgeLeft; i <= CellFormat::xlInsideVertical; i++)
+        for (int i = TCellFormat::xlEdgeLeft; i <= TCellFormat::xlInsideVertical; i++)
         {
             if (cf.BordeLine.Contains(i))
       	        //try {range.OlePropertyGet("Borders", i).OlePropertySet("LineStyle", cf.BorderStyle);} catch(...) {};
@@ -787,9 +789,9 @@ Variant __fastcall MSExcelWorks::OpenWorksheetFromFile(AnsiString& FileName)
 
 //---------------------------------------------------------------------------
 // Добавление листа
-Variant __fastcall MSExcelWorks::AddSheet(Variant& Book, AnsiString& SheetName, int SheetIndex)
+Variant __fastcall MSExcelWorks::AddSheet(Variant& Workbook, int SheetIndex)
 {
-    Variant Sheets = Book.OlePropertyGet("Worksheets");
+    Variant Sheets = Workbook.OlePropertyGet("Worksheets");
     Variant Sheet;
 
     Variant position;
@@ -797,9 +799,7 @@ Variant __fastcall MSExcelWorks::AddSheet(Variant& Book, AnsiString& SheetName, 
     {
         position = Sheets.OlePropertyGet("Count");
         Variant After = Sheets.OlePropertyGet("Item", position);
-
-        Sheet = Sheets.OleFunction("Add", VT_EMPTY, After);
-        //Sheet = Sheets.OleFunction("Add", EmptyParam, After);
+        Sheet = Sheets.OleFunction("Add", Variant().NoParam(), After);
     }
     else if (SheetIndex == 1)    // Добавление в начало книги
     {
@@ -809,12 +809,15 @@ Variant __fastcall MSExcelWorks::AddSheet(Variant& Book, AnsiString& SheetName, 
     {                        // Добавление в позицию SheetIndex
         position = SheetIndex - 1;
         Variant After = Sheets.OlePropertyGet("Item", position);
-        Sheet = Sheets.OleFunction("Add", VT_EMPTY, After);
-        //Sheet = Sheets.OleFunction("Add", EmptyParam, After);
+        Sheet = Sheets.OleFunction("Add", Variant().NoParam(), After);
     }
 
-    Sheet.OlePropertySet("Name", SheetName);
     return Sheet;
+}
+
+void __fastcall MSExcelWorks::SetSheetName(Variant Sheet, const String &SheetName)
+{
+    Sheet.OlePropertySet("Name", SheetName);
 }
 
 //---------------------------------------------------------------------------
@@ -831,14 +834,28 @@ Variant __fastcall MSExcelWorks::GetActiveSheet()
     }
 }
 
+/* Количество листов в рабочей книге*/
+int _fastcall MSExcelWorks::GetSheetsCount(Variant& Workbook)
+{
+    return Workbook.OlePropertyGet("Worksheets").OlePropertyGet("Count");
+}
+
+
 //---------------------------------------------------------------------------
 // Страница по номеру                               // недоделано, нужно передвать также книгу
 Variant __fastcall MSExcelWorks::GetSheet(Variant& Workbook, int SheetIndex)
 {
     if (!VarIsNull(ExcelApp))   // VarIsEmpty
     {
-        Variant Worksheet = Workbook.OlePropertyGet("Worksheets", SheetIndex);
-        return  Worksheet;
+        try
+        {
+            Variant Worksheet = Workbook.OlePropertyGet("Worksheets", SheetIndex);
+            return  Worksheet;
+        }
+        catch(...)
+        {
+            throw Exception("Выход за границы индекса.");
+        }
         //return  WorkSheets.OlePropertyGet("Item", SheetIndex);
     }
     else
@@ -872,6 +889,7 @@ void __fastcall MSExcelWorks::CloseApplication()
 void __fastcall MSExcelWorks::CloseWorkbook(Variant Workbook, bool fCloseAppIfNoDoc)
 {
 	Workbook.OleFunction("Close", false);
+    Workbook = Unassigned;	// 2017-05-17 проверить
     if (fCloseAppIfNoDoc && WorkBooks.OlePropertyGet("Count") == 0)
     {
         CloseApplication();

@@ -16,11 +16,11 @@
     2. Если необходимо изменять формат данных в ячейках, то создать вектор AnsiString:
         std::vector<AnsiString> format_body;
     3. Если необходимо изменять цвет текста, границ, выравнивания в ячейках, то создать переменную Variant
-        и объект CELLFORMAT:
+        и объект TCellFormat:
         Variant region_body;
-        CELLFORMAT cf_body;
-        cf_body.BorderStyle = CELLFORMAT::xlContinuous;
-        cf_body.FontStyle = cfHead.FontStyle << CELLFORMAT::fsBold;
+        TCellFormat cf_body;
+        cf_body.BorderStyle = TCellFormat::xlContinuous;
+        cf_body.FontStyle = cfHead.FontStyle << TCellFormat::fsBold;
         cf_body.bSetFontColor = true;
         cf_body.FontColor = clRed;
         cf_body.bWrapText = false;
@@ -61,14 +61,16 @@
 #include "OdacVcl.hpp"
 
 
-class CellFormat {
+class TCellFormat {
 public:
-    __fastcall CellFormat();
+    __fastcall TCellFormat();
+    __fastcall ~TCellFormat();
     enum TDataAlignment {daDefault = 0, daTop = 2, daBottom = 4, daLeft = 2, daCenter = 3, daRight=4};
     enum TFontStyle {fsDefault = 0, fsNormal, fsBold, fsItalic, fsUnderline, fsStrikeOut};
     enum TBorderStyle {bsDefault = -1, bsNone = 0, xlContinuous = 1, bsBold = 7, bsDash1 = 2, bsDash2 = 3, bsDash3 = 4};
     enum TBorderLine {xlEdgeLeft = 7, xlEdgeTop, xlEdgeBottom, xlEdgeRight, xlInsideHorizontal, xlInsideVertical};
-    AnsiString DataFormat;
+
+    String DataFormat;
     TDataAlignment HorizontalAlignment;
     TDataAlignment VerticalAlignment;
     TBorderStyle BorderStyle;
@@ -90,7 +92,7 @@ private:
 
 };
 
-__fastcall CellFormat::CellFormat()
+__fastcall TCellFormat::TCellFormat()
 {
     BorderColor = RGB(0,0,0);
     FontColor = BorderColor;
@@ -109,8 +111,12 @@ __fastcall CellFormat::CellFormat()
     bWrapText = -1;
 }
 
-typedef CellFormat CELLFORMAT;
-typedef std::vector<AnsiString> DATAFORMAT;
+__fastcall TCellFormat::~TCellFormat()
+{
+}
+
+
+typedef std::vector<String> DATAFORMAT;
 typedef std::pair<int, int> TLinkFields;
 typedef std::pair<String, Variant> TNamedRange;     // Для списка имен и диапазонов
 
@@ -136,7 +142,9 @@ public:
 	void __fastcall CloseApplication();                     // Функция закрытия Excel
     void __fastcall CloseWorkbook(Variant Workbook, bool fCloseAppIfNoDoc = false);
     void __fastcall SaveDocument(Variant& workbook, const AnsiString& FileName = "");
-    Variant __fastcall AddSheet(Variant& Book, AnsiString& SheetName, int SheetIndex = -1);
+    Variant __fastcall AddSheet(Variant& Workbook, int SheetIndex = -1);
+    void __fastcall SetSheetName(Variant Sheet, const String &SheetName);
+    int _fastcall GetSheetsCount(Variant& Workbook);
     void __fastcall SetActiveWorkbook(Variant& Workbook);
     void __fastcall SetActiveWorksheet(Variant& Worksheet);
     void __fastcall SetActiveRange(Variant& Worksheet, int firstRow, int firstCol, int lastRow = 0, int lastCol = 0);
@@ -163,9 +171,9 @@ public:
     Variant __fastcall WriteFormula(Variant& worksheet, const AnsiString& txt, int Row, int Col, int countRow = 1, int countCol = 1,  bool fBold = false);
     Variant __fastcall MergeCells(Variant& worksheet, int firstRow, int firstCol, int lastRow, int lastCol);
 
-    void __fastcall SetRangeFormat(Variant& range, const CellFormat& cf, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
-    void __fastcall SetRangeFormat(Variant& range, const CellFormat& cf);
-    void __fastcall SetRangeDataFormat(Variant& range, AnsiString& format);
+    void __fastcall SetRangeFormat(Variant& range, const TCellFormat& cf, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
+    void __fastcall SetRangeFormat(Variant& range, const TCellFormat& cf);
+    void __fastcall SetRangeDataFormat(Variant& range, String& format);
 	void __fastcall RangeFormat(Variant& wst, int firstRow, int CountRow, int firstCol, int lastCol, int Size, int Font_Color, int Inter_Color, bool Bold); // Инициализация ячеек
     void __fastcall ClearFormats(Variant& range);
     void __fastcall ClearWorksheet(Variant& Worksheet);
