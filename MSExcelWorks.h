@@ -83,8 +83,12 @@ public:
     unsigned long FillColor;
     Set <char, 0, 9> FontStyle;
     Set <char, 0, 12> BordeLine;
-    char ShrinkToFit;
-    char bWrapText;
+    int ShrinkToFit;
+    int bWrapText;
+
+    int Width;
+    int Height;
+
 
 protected:
 
@@ -109,6 +113,8 @@ __fastcall TCellFormat::TCellFormat()
     bSetFillColor = false;
     ShrinkToFit = -1;
     bWrapText = -1;
+    Width = -1;
+    Height = -1;
 }
 
 __fastcall TCellFormat::~TCellFormat()
@@ -116,7 +122,9 @@ __fastcall TCellFormat::~TCellFormat()
 }
 
 
-typedef std::vector<String> DATAFORMAT;
+typedef std::vector<String> TDataFormat;
+
+//typedef std::vector<String> DATAFORMAT;
 typedef std::pair<int, int> TLinkFields;
 typedef std::pair<String, Variant> TNamedRange;     // Для списка имен и диапазонов
 
@@ -137,6 +145,7 @@ public:
     //enum TDirection {Down = 1, Up, Left, Right};
     //enum xlBooleane {xlDefault = -1, xlFalse, xlTrue};
     Variant __fastcall OpenApplication();
+    void __fastcall AssignDocument(Variant Workbook);
     Variant __fastcall OpenDocument(AnsiString TemplateName = "");     //Запуск Excel
     //Variant __fastcall OpenWorksheetFromFile(AnsiString& FileName);
 	void __fastcall CloseApplication();                     // Функция закрытия Excel
@@ -151,6 +160,7 @@ public:
 	Variant __fastcall GetActiveSheet();
 	Variant __fastcall GetSheet(Variant& Workbook, int SheetIndex = 1);
     Variant __fastcall GetRange(Variant& Worksheet, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
+    Variant __fastcall GetRangeByNameGlobal(Variant& Workbook, const String& RangeName);
     Variant __fastcall GetRangeByName(Variant& Worksheet, const String& RangeName);
     Variant __fastcall GetRangeFromRange(Variant& range, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
     std::vector<TNamedRange> __fastcall GetNamesFromObject(Variant& Object, const String& prefix = "");
@@ -158,12 +168,16 @@ public:
     int __fastcall GetRangeColumnsCount(Variant& range);
     AnsiString __fastcall GetRangeFormat(Variant& range);
 
-    Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData,  int firstRow, int firstCol, std::vector<AnsiString> *DataFormat = NULL);
-    Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData, AnsiString CellName, std::vector<AnsiString> *DataFormat = NULL);
-    Variant __fastcall WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, bool extendAllow = false, std::vector<AnsiString> *DataFormat = NULL);
+    Variant __fastcall AddName(Variant Object, const String& name, Variant range, const String& comment = "");
+    void __fastcall ChangeNamedRange(Variant old_range, Variant new_range);
 
 
-	Variant __fastcall WriteToRange(const AnsiString& txt, Variant range, AnsiString format = "");
+    Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData,  int firstRow, int firstCol, TDataFormat *DataFormat = NULL);
+    Variant __fastcall WriteTable(Variant& worksheet, const Variant &ArrayData, AnsiString CellName, TDataFormat *DataFormat = NULL);
+    Variant __fastcall WriteTableToRange(Variant& range, const Variant &ArrayData,  int firstRow, int firstCol, bool extendAllow = false, TDataFormat *DataFormat = NULL);
+
+
+	Variant __fastcall WriteToRange(Variant range, const String& txt, String format = "");
 	//Variant __fastcall WriteToRange(const AnsiString& txt, const AnsiString& sRangeName, AnsiString format = "");
 	Variant __fastcall WriteToCell(Variant& worksheet, const AnsiString& txt, int Row, int Col, AnsiString format = "");
     Variant __fastcall WriteToCell(Variant& worksheet, const AnsiString& txt, AnsiString CellName, AnsiString format = "");
@@ -173,12 +187,15 @@ public:
 
     void __fastcall SetRangeFormat(Variant& range, const TCellFormat& cf, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
     void __fastcall SetRangeFormat(Variant& range, const TCellFormat& cf);
+
+    void __fastcall SetRangeColumnsFormat(Variant& range, std::vector<TCellFormat> cf);
+
     void __fastcall SetRangeDataFormat(Variant& range, String& format);
 	void __fastcall RangeFormat(Variant& wst, int firstRow, int CountRow, int firstCol, int lastCol, int Size, int Font_Color, int Inter_Color, bool Bold); // Инициализация ячеек
     void __fastcall ClearFormats(Variant& range);
     void __fastcall ClearWorksheet(Variant& Worksheet);
 	void __fastcall DrawBorders(Variant& range, bool r7 = true, bool r8 = true, bool r9 = true, bool r10 = true, bool r11 = true, bool r12 = true); // Прорисовываем тонкими линиями решетку вокруг ячеек заданного диапазона
-    void __fastcall SetRangeColumnsFormat(Variant& range, const std::vector<AnsiString> &cf);
+    void __fastcall SetRangeColumnsDataFormat(Variant& range, const TDataFormat &df);
     void __fastcall CopyRangeFormat(Variant& range_src, Variant& range_dst);
 	void __fastcall RangeShtrich(Variant& wst, int firstRow, int CountRow, int firstCol, int lastCol, int Shtrich);
 	void __fastcall SetColumnsAutofit(Variant& range);
@@ -220,11 +237,10 @@ public:
 
     std::vector<TLinkFields> assignDataSetToRangeFields(Variant range, TDataSet* dataSet, const String& fieldNamePrefix = "");
     void writeDataSetToSingleRange(Variant worksheet, TDataSet* dataSet, const String& fieldNamePrefix = "");
-    void writeDataSetToTableRange(Variant tableRange, TDataSet* dataSet, const String& fieldNamePrefix = "");
-    String getCellName(Variant cell, const String& prefix = "");
+    Variant writeDataSetToTableRange(Variant tableRange, TDataSet* dataSet, const String& fieldNamePrefix = "");
 
-
-
+    String getCellName(Variant cell);
+    String getCellName(Variant cell, const String& prefix);
 
 
     bool __fastcall IsReadOnly(Variant& workbook);

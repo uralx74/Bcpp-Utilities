@@ -454,327 +454,40 @@ void __fastcall TDocumentWriter::ExportToWordTemplate_old(const TWordExportParam
     CoUninitialize();
 }
 
+
 /*
-//---------------------------------------------------------------------------
-// ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
-void __fastcall TDocumentWriter::ExportToExcel(TOraQuery *OraQuery)
-{
-    CoInitialize(NULL);
-
-    bool fDone = false;
-
-    // Определяем количество записей
-    OraQuery->Last();
-	int RecCount = OraQuery->RecordCount;
-
-    // Определяем количество полей
-    int FieldCount = OraQuery->FieldCount;
-
-    Variant data_body;
-    Variant data_head;
-    DATAFORMAT df_body;
-    df_body.reserve(FieldCount);
-
-    int ExcelFieldCount = param_excel.Fields.size();
-
-    try {     // Определение списка полей, формирование шапки таблицы, определение типа данных
-        //data_body = CreateVariantArray(RecCount, FieldCount);  // Создаем массив для таблицы
-        //data_head = CreateVariantArray(1, FieldCount);  // Шапка таблицы
-
-        if (ExcelFieldCount >= FieldCount)   // Заполнение если есть поля в ExcelFields
-        {
-            data_body = CreateVariantArray(RecCount, ExcelFieldCount);     // Создаем массив для таблицы
-            data_head = CreateVariantArray(1, ExcelFieldCount);            // Шапка таблицы
-
-            for (unsigned int j = 0; j < ExcelFieldCount; j++)
-            {
-                data_head.PutElement(param_excel.Fields[j].name, 1, j+1);
-                df_body.push_back(param_excel.Fields[j].format);
-            }
-        }
-        else
-        {
-            data_body = CreateVariantArray(RecCount, FieldCount);  // Создаем массив для таблицы
-            data_head = CreateVariantArray(1, FieldCount);         // Шапка таблицы
-
-            // Формируем шапку таблицы
-            for (int j = 1; j <= FieldCount; j++ )  		// Перебираем все поля
-            {
-                TField* field = OraQuery->Fields->FieldByNumber(j);
-                // Задаем формат столбцов в таблице Excel
-                AnsiString sCellFormat;
-
-                data_head.PutElement(field->DisplayName, 1, j);
-                switch (field->DataType) {  // Нужно тестирование и доработка (добавить форматы и тд.)
-                case ftString:
-                    sCellFormat = "@";
-                    break;
-                case ftTime:
-                    sCellFormat = "чч:мм:сс";
-                    break;
-                case ftDate:
-                    sCellFormat = "ДД.ММ.ГГГГ";
-                    break;
-                case ftDateTime:
-                    sCellFormat = "ДД.ММ.ГГГГ";
-                    break;
-                case ftCurrency: case ftFloat:
-                    sCellFormat = "0.00";
-                    break;
-                case ftSmallint: case ftInteger: case ftLargeint:
-                    sCellFormat = "0";
-                    break;
-                default:
-                    sCellFormat = "@";
-                }
-                df_body.push_back(sCellFormat);
-	        }
-        }
-    }
-    catch (Exception &e)
-    {
-        VarClear(data_head);
-        VarClear(data_body);
-        CoUninitialize();
-        _threadMessage = e.Message;
-        throw Exception(_threadMessage);
-        //fDone = true;
-    }
-
-    MSExcelWorks msexcel;
-    Variant Workbook;
-    Variant Worksheet1;
-
-    if (!fDone)           // Заполнение массива данных
-    {
-        AnsiString s = "";
-        OraQuery->First();	// Переходим к первой записи (на всякий случай)
-        VarArrayLock(data_body);
-        int i = 1;          // Пропускаем шапку таблицы
-	    while (!OraQuery->Eof)
-        {
-		    for (int j = 1; j <= FieldCount; j++ )
-            {
-        	    s = OraQuery->Fields->FieldByNumber(j)->AsString;
-                data_body.PutElement(s, i, j);
-            }
-            OraQuery->Next();  // Переходим к следующей записи
-            i++;
-	    }
-        VarArrayUnlock(data_body);
-       try
-       {
-            msexcel.OpenApplication();
-            Workbook = msexcel.OpenDocument();
-        }
-        catch (Exception &e)
-        {
-            VarClear(data_head);
-            VarClear(data_body);
-            CoUninitialize();
-            _threadMessage = e.Message;
-            throw Exception(_threadMessage);
-        }
-        Worksheet1 = msexcel.GetSheet(Workbook, 1);
-    }
-
-
-    if (!fDone && !VarIsEmpty(Worksheet1))  // Заполняем документ Excel
-    {
-    //if (!VarIsEmpty(Worksheet1)) { // Заполняем документ Excel
-        TDateTime DateTime = TDateTime::CurrentDateTime();
-
-        CELLFORMAT cf_body;
-        CELLFORMAT cf_head;
-        CELLFORMAT cf_title;
-        CELLFORMAT cf_createtime;
-        CELLFORMAT cf_sql;
-
-        cf_body.BorderStyle = CELLFORMAT::xlContinuous;
-        cf_head.BorderStyle = CELLFORMAT::xlContinuous;
-        cf_head.FontStyle = cf_head.FontStyle << CELLFORMAT::fsBold;
-
-        cf_head.bWrapText = false;
-
-        cf_title.FontStyle = cf_title.FontStyle << CELLFORMAT::fsBold;
-        cf_createtime.bSetFontColor = true;
-        cf_createtime.FontColor = clRed;
-        cf_sql.bWrapText = false;
-
-        // Определяем формат данных
-        //std::vector<MSExcelWorks::CELLFORMAT> formats;
-        //formats = msexcel.GetDataFormat(ArrayDataBody, 1);
-        //std::vector<AnsiString> DataFormat;
-        //DataFormat = msexcel.GetDataFormat(ArrayDataBody, 1);
-        //for (int i=0; i  < QueryParams.size(); i++) {
-            //QueryParams[i].
-        //}
-
-
-        // Заполняем массив, со значеними параметров, заданными пользователем
-        // Возможно в будущем сделать распознавание параметра с типом "separator",
-        Variant data_parameters;
-        int param_count = UserParams.size();  // Параметры отчета
-        int visible_param_count = 0;
-        for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
-        {
-            if ( UserParams[i]->isVisible() )
-            {
-                visible_param_count++;
-            }
-        }
-        if (param_count > 0) {    // Список параметров для вывода в Excel
-            data_parameters = CreateVariantArray(visible_param_count, 1);
-            for (int i=0; i <= param_count-1; i++)
-            {
-                if ( !UserParams[i]->isVisible() )
-                {
-                    continue;
-                }
-
-                if (UserParams[i]->type != "separator")
-                {
-                    data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
-                }
-                else
-                {
-                    data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
-                }
-            }
-        }
-
-        // Вывод данных на лист Excel
-        Variant range_title = msexcel.WriteToCell(Worksheet1, param_excel.title_label , 1, 1);
-        Variant range_createtime = msexcel.WriteToCell(Worksheet1, "По состоянию на: " + DateTime.DateTimeString(), 2, 1);
-        Variant range_parameters;
-        if (param_count > 0)
-        {
-            range_parameters = msexcel.WriteTable(Worksheet1, data_parameters, 3, 1);
-        }
-
-        Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
-        Variant range_tablebody = msexcel.WriteTable(Worksheet1, data_body, 4 + visible_param_count, 1, &df_body);
-
-        msexcel.SetRangeFormat(range_tablehead, cf_head);
-        msexcel.SetRangeFormat(range_tablebody, cf_body);
-        msexcel.SetRangeFormat(range_title, cf_title);
-        msexcel.SetRangeFormat(range_createtime, cf_createtime);
-        if (param_count > 0)
-        {
-            msexcel.SetRangeFormat(range_parameters, cf_createtime);
-        }
-
-
-        Variant range_all = msexcel.GetRangeFromRange(range_tablehead, 1, 1, msexcel.GetRangeRowsCount(range_tablebody)+1, msexcel.GetRangeColumnsCount(range_tablebody));
-
-
-        if (this->param_excel.title_height > 0)
-        {
-            msexcel.SetRowHeight(range_tablehead, this->param_excel.title_height);    // Задаем высоту заголовка таблицы
-        }
-
-        msexcel.SetAutoFilter(range_all);   // Включаем автофильтр
-        msexcel.SetColumnsAutofit(range_all);  // Ширина ячеек по содержимому
-
-
-        // Настройка заголовка (размер и тп)
-        for (int i=0; i < ExcelFieldCount; i++)   // Заполнение если есть поля в ExcelFields
-        {    //CELLFORMAT cf_cell;
-            //cf_cell.bSetFontColor = true;
-            //cf_cell.FontColor = clGreen;
-
-            if (param_excel.Fields[i].bwraptext >= 0)
-            {
-                CELLFORMAT cf_cell;
-                cf_cell.bWrapText = param_excel.Fields[i].bwraptext;
-                msexcel.SetRangeFormat(range_tablehead, cf_cell, 1, i+1);
-            }
-
-            if (param_excel.Fields[i].width >= 0)
-            {
-                msexcel.SetColumnWidth(range_tablehead, i+1, param_excel.Fields[i].width);    // Задаем высоту заголовка таблицы
-                //msexcel.SetColumnWidth(range_tablehead, 1);    // Задаем высоту заголовка таблицы
-            }
-        }
-
-        //msexcel.SetRowsAutofit(range_tablehead);
-
-
-        // Выводим текст sql-запроса на второй лист
-        Variant Worksheet2 = msexcel.GetSheet(Workbook, 2);
-
-
-        Variant range_sqltext;
-        int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
-        int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
-        for (int i = 1; i <= n; i++)
-        {
-            AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
-            range_sqltext = msexcel.WriteToCell(Worksheet2, sQueryPart, i, 1);
-            msexcel.SetRangeFormat(range_sqltext, cf_sql);
-        }
-
-        df_body.clear();
-
-        if (DstFileName == "")
-        {
-            msexcel.SetVisible(Workbook);
-        }
-        else
-        {
-            msexcel.SaveDocument(Workbook, DstFileName);
-            VarClear(Workbook);
-            VarClear(Worksheet1);
-            VarClear(Worksheet2);
-            msexcel.CloseApplication();
-            _resultFiles.push_back(DstFileName);
-        }
-
-
-        //if (ExportMode == EM_EXCEL_FILE) {
-        //    msexcel.SaveAsDocument(Workbook, DstFileName);
-        //    msexcel.CloseExcel();
-        //} else {
-            //Workbook.OlePropertySet("Name", "blabla");
-        //    msexcel.SetVisibleExcel(true, true);
-        //}
-    }
-
-    // Освобождение памяти
-    VarClear(data_head);
-    data_head = NULL;
-
-    VarClear(data_body);
-    data_body = NULL;
-
-    CoUninitialize();
-
-    if (fDone)
-    {
-        throw Exception("Прерывание.");
-    }
-
-}
+   Вспомогательная функция для автоматического создания шаблона
+   из параметров
 */
-
-//---------------------------------------------------------------------------
-// Заполнение Excel файла с использованием шаблона xlt
-void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excelExportParams)
+Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* excelExportParams)
 {
-    CoInitialize(NULL);
+    //CoInitialize(NULL);
 
-    String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
+    //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
     MSExcelWorks msexcel;
     Variant Workbook;
-    Variant Worksheet;
+    Variant Worksheet1;     // Основной лист
+    Variant Worksheet2;     // Лист для текста запроса
 
     try
     {
         msexcel.OpenApplication();
-        Workbook = msexcel.OpenDocument(TemplateFullName);
-        Worksheet = msexcel.GetSheet(Workbook, 1);
+        Workbook = msexcel.OpenDocument();
+        Worksheet1 = msexcel.GetSheet(Workbook, 1);
+
+
+        msexcel.SetVisible(true);
+
+        if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
+        {
+            Worksheet2 = msexcel.GetSheet(Workbook, 2);
+        }
+        else
+        {
+            Worksheet2 = msexcel.AddSheet(Workbook);    // иначе добавляем новый лист
+        }
     }
     catch (Exception &e)
     {
@@ -786,10 +499,306 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
         {
         }
         CoUninitialize();
-        String msg = "Ошибка при открытии файла-шаблона " + TemplateFullName + ".\nОбратитесь к системному администратору.";
+        String msg = "Ошибка при создании шаблона.\nОбратитесь к системному администратору.";
         throw Exception(msg);
     }
 
+    msexcel.SetActiveWorksheet(Worksheet1); // Устанавливаем активный лист 1й
+
+    Variant range;
+
+    /*Variant range = msexcel.GetRange(Worksheet1, 1,1,1,1);
+    msexcel.AddName(Worksheet1,"doc_title", range);
+
+    range = msexcel.GetRange(Worksheet1, 2,1,1,1);
+    msexcel.AddName(Worksheet1,"info", range);
+
+    range = msexcel.GetRange(Worksheet1, 3,1,1,1);
+    msexcel.AddName(Worksheet1,"head_table", range); */
+
+
+    TDataSet* tableDs = excelExportParams->tableDs[0].dataSet;
+
+
+	int RecCount = tableDs->RecordCount;
+
+    // Определяем количество полей
+    int FieldCount = tableDs->FieldCount;
+
+    Variant data_head;
+
+    //Variant data_body;
+    //TDataFormat df_body;            // Переделать на Cellformat
+    //df_body.reserve(FieldCount);
+
+
+
+    int ExcelFieldCount = excelExportParams->Fields.size();
+
+    std::vector<TCellFormat> cf_tablebody;
+    std::vector<TCellFormat> cf_tablehead;
+
+    if (ExcelFieldCount < FieldCount)   // Заполнение если есть поля в ExcelFields  (если параметры экспорта не заданы)
+    {
+        data_head = vartools::CreateVariantArray(1, FieldCount);         // Шапка таблицы
+
+        excelExportParams->Fields.clear();
+
+        // Формируем шапку таблицы
+        for (int j = 1; j <= FieldCount; j++ )  		// Перебираем все поля
+        {
+            TField* field = tableDs->Fields->FieldByNumber(j);
+            // Задаем формат столбцов в таблице Excel
+            String sCellFormat;
+
+            data_head.PutElement(field->DisplayName, 1, j);
+            switch (field->DataType) {  // Нужно тестирование и доработка (добавить форматы и тд.)
+            case ftString:
+                sCellFormat = "@";
+                break;
+            case ftTime:
+                sCellFormat = "чч:мм:сс";
+                break;
+            case ftDate:
+                sCellFormat = "ДД.ММ.ГГГГ";
+                break;
+            case ftDateTime:
+                sCellFormat = "ДД.ММ.ГГГГ";
+                break;
+            case ftCurrency: case ftFloat:
+                sCellFormat = "0.00";
+                break;
+            case ftSmallint: case ftInteger: case ftLargeint:
+                sCellFormat = "0";
+                break;
+            default:
+                sCellFormat = "@";
+            }
+
+            TExcelField ef;
+            ef.name = field->DisplayName;
+            ef.format = sCellFormat;
+            excelExportParams->Fields.push_back(ef);
+        }
+        ExcelFieldCount = excelExportParams->Fields.size();    // Обновляем кол-во полей параметров экспорта
+    }
+
+
+    try      // Определение списка полей, формирование шапки таблицы, определение типа данных
+    {
+        data_head = vartools::CreateVariantArray(1, ExcelFieldCount);            // Шапка таблицы
+
+        TCellFormat cf_tablehead_tmp;   // Временный объект для форматирования ячейки шапки таблицы
+        TCellFormat cf_tablebody_tmp;   // Временный объект для форматирования ячейки тела таблицы
+
+
+        for (unsigned int j = 0; j < ExcelFieldCount; j++)
+        {
+            data_head.PutElement(excelExportParams->Fields[j].name, 1, j+1);
+
+            cf_tablehead_tmp.BorderStyle = TCellFormat::xlContinuous;
+            cf_tablehead_tmp.FontStyle = cf_tablehead_tmp.FontStyle << TCellFormat::fsBold;
+            cf_tablehead_tmp.Width = excelExportParams->Fields[j].width;
+            cf_tablehead.push_back(cf_tablehead_tmp);
+            cf_tablehead_tmp.bWrapText = excelExportParams->Fields[j].bwraptext_head;
+
+
+            //cf_tablebody_tmp.DataFormat = excelExportParams->Fields[j].format;
+            cf_tablebody_tmp.DataFormat = excelExportParams->Fields[j].format;
+            cf_tablebody_tmp.bWrapText = excelExportParams->Fields[j].bwraptext_body;
+            cf_tablebody_tmp.BorderStyle = TCellFormat::xlContinuous;
+
+
+            cf_tablebody.push_back(cf_tablebody_tmp);
+
+            //String t1 = excelExportParams->Fields[j].format;
+            //String t2 = excelExportParams->Fields[j].name;
+        }
+    }
+    catch (Exception &e)
+    {
+        VarClear(data_head);
+        //VarClear(data_body);
+
+        throw Exception(e.Message);
+    }
+
+
+
+    // Раздел - Заголовок документа
+    Variant range_doc_title = msexcel.GetRange(Worksheet1, 1, 1, 1, 1);
+    msexcel.AddName(Workbook, "report_title", range_doc_title);
+    TCellFormat cf_doc_title;   // Временный объект для форматирования ячейки тела таблицы
+    cf_doc_title.FontStyle = cf_doc_title.FontStyle << TCellFormat::fsBold;
+    cf_doc_title.bSetFontColor = true;
+    cf_doc_title.FontColor = clBlack;
+    msexcel.SetRangeFormat(range_doc_title, cf_doc_title);
+
+
+    // Раздел - Время создания отчета
+    Variant range_cre_dttm = msexcel.GetRange(Worksheet1, 2, 1, 1, 1);
+    msexcel.AddName(Workbook, "report_cre_dttm", range_cre_dttm);
+    TCellFormat cf_cre_dttm;   // Временный объект для форматирования ячейки тела таблицы
+    cf_cre_dttm.bSetFontColor = true;
+    cf_cre_dttm.FontColor = clRed;
+    //cf_cre_dttm.BorderStyle = TCellFormat::xlContinuous;
+    //cf_cre_dttm.FontStyle = cf_cre_dttm.FontStyle << TCellFormat::fsBold;
+    //cf_cre_dttm.Width = excelExportParams->Fields[j].width;
+    //cf_cre_dttm.push_back(cf_tablehead_tmp);
+    //cf_cre_dttm.bWrapText = excelExportParams->Fields[j].bwraptext_head;
+    msexcel.SetRangeFormat(range_cre_dttm, cf_cre_dttm);
+
+
+    // Раздел параметров
+    
+    Variant range_parameters = msexcel.GetRange(Worksheet1, 3, 1, 1, FieldCount);
+    msexcel.AddName(Workbook, "report_parameters", range_parameters);
+
+    TCellFormat cf_parameters;   // Временный объект для форматирования ячейки тела таблицы
+    cf_parameters.bSetFontColor = true;
+    cf_parameters.FontColor = clBlue;
+    //cf_parameters.FontStyle = cf_parameters.FontStyle << TCellFormat::fsBold;
+    msexcel.SetRangeFormat(range_parameters, cf_parameters);
+
+
+
+    // Шапка таблицы
+    Variant range_tablehead = msexcel.GetRange(Worksheet1, 4, 1, 1, FieldCount);
+    msexcel.AddName(Workbook, "table_head", range_tablehead);
+    msexcel.WriteTableToRange(range_tablehead, data_head, 1, 1, false);
+    //Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
+
+    msexcel.SetRangeColumnsFormat(range_tablehead, cf_tablehead);
+
+
+
+    Variant range_tablebody = msexcel.GetRange(Worksheet1, 5,1,1,FieldCount);
+    msexcel.AddName(Workbook,"table_body", range_tablebody);
+    //msexcel.SetRangeColumnsFormat(range_tablebody, df_body);
+    msexcel.SetRangeColumnsFormat(range_tablebody, cf_tablebody);
+
+
+    // Имена ячеек для вывода таблицы
+    for (int i = 1; i <= FieldCount; i++)
+    {
+        TField* field = tableDs->Fields->FieldByNumber(i);
+        Variant cell = msexcel.GetRangeFromRange(range_tablebody, 1, i, 1, 1);
+        msexcel.AddName(Workbook, "table_column_" + field->DisplayName, cell);
+    }
+
+    // Таблица для текста запроса
+    Variant range_query_text = msexcel.GetRange(Worksheet2, 1, 1, 1, 1);
+    msexcel.AddName(Workbook, "report_query_text", range_query_text);
+
+
+    return Workbook;
+}
+
+//---------------------------------------------------------------------------
+// ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
+void __fastcall TDocumentWriter::ExportToExcel(TExcelExportParams* excelExportParams)
+{
+    //bool fDone = false;
+
+    // Создаем шаблон
+    Variant Workbook = excelExportParams->templateDocument = CreateExcelTemplate(excelExportParams);
+
+    MSExcelWorks msexcel;
+    msexcel.AssignDocument(Workbook);
+    Variant Worksheet1 = msexcel.GetSheet(Workbook, 1);
+
+    Variant range_doc_title = msexcel.GetRangeByName(Worksheet1, "report_title");
+    msexcel.WriteToRange(range_doc_title, excelExportParams->title_label);
+
+    Variant range_cre_dttm = msexcel.GetRangeByName(Worksheet1, "report_cre_dttm");
+    msexcel.WriteToRange(range_cre_dttm, "По состоянию на: " + TDateTime::CurrentDateTime());
+
+    //msexcel.WriteToCell(Worksheet1,"helo",2, 1);
+
+
+
+    // Выводим данные
+    ExportToExcelTemplate(excelExportParams);
+
+
+    // Производим дополнительные настройки отчета
+    Variant range_table_body = msexcel.GetRangeByName(Worksheet1, "table_body");
+    Variant range_table_head = msexcel.GetRangeByName(Worksheet1, "table_head");
+    Variant rangeRowsCount = msexcel.GetRangeRowsCount(range_table_body);
+    Variant rangeColumnsCount = msexcel.GetRangeColumnsCount(range_table_body);
+    Variant range_table_all = msexcel.GetRangeFromRange(range_table_head, 1, 1, rangeRowsCount + 1, rangeColumnsCount);
+    msexcel.AddName(Worksheet1, "table_all", range_table_all);
+
+
+    Variant range_tablebody = msexcel.GetRangeByName(Worksheet1, "table_body");
+    msexcel.SetAutoFilter(range_table_all);   // Включаем автофильтр
+
+    // Настраиваем ширину ячеек
+    // msexcel.SetColumnsAutofit(range_table_all);  // Ширина ячеек по содержимому
+    for (int i=1; i<= rangeColumnsCount; i++)
+    {
+        int width = excelExportParams->Fields[i-1].width;
+        msexcel.SetColumnWidth(range_table_all, i, width);
+    }
+
+
+    // Освобождение памяти
+    /*VarClear(data_head);
+    data_head = NULL;
+
+    VarClear(data_body);
+    data_body = NULL;*/
+
+}
+
+
+
+//---------------------------------------------------------------------------
+// Заполнение Excel файла с использованием шаблона xlt
+void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excelExportParams)
+{
+    String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
+
+    // Открываем шаблон MS Excel
+    MSExcelWorks msexcel;
+
+    if (VarIsClear(excelExportParams->templateDocument))
+    {
+        try
+        {
+            msexcel.OpenApplication();
+            excelExportParams->templateDocument = msexcel.OpenDocument(TemplateFullName);
+        }
+        catch (Exception &e)
+        {
+            try
+            {
+                msexcel.CloseApplication();
+            }
+            catch (...)
+            {
+            }
+            String msg = "Ошибка при открытии файла-шаблона " + TemplateFullName + ".\nОбратитесь к системному администратору.";
+            throw Exception(msg);
+        }
+    }
+    else
+    {
+        msexcel.AssignDocument(excelExportParams->templateDocument);
+    }
+
+    Variant Workbook = excelExportParams->templateDocument;
+    Variant Worksheet = msexcel.GetSheet(Workbook, 1);
+
+
+    /* Выводим Variant array */
+    for (std::vector<TExcelVtArray>::iterator vtArrayIt = excelExportParams->tableVtArray.begin(); vtArrayIt != excelExportParams->tableVtArray.end(); vtArrayIt++ )
+    {
+        Variant table =  msexcel.GetRangeByNameGlobal(Workbook, (*vtArrayIt).tableName);
+        Variant new_range = msexcel.WriteTableToRange(table, (*vtArrayIt).vtArray, 1, 1, true);
+
+        msexcel.ChangeNamedRange(table, new_range);
+    }
 
     /* Сначала заполняем отдельные поля */
     for (std::vector<TExcelSingleDataSet>::iterator ds = excelExportParams->singleDs.begin(); ds != excelExportParams->singleDs.end(); ds++ )
@@ -800,16 +809,25 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
     /* Затем заполняем таблицы, если они конечно есть */
     for (std::vector<TExcelTableDataSet>::iterator ds = excelExportParams->tableDs.begin(); ds != excelExportParams->tableDs.end(); ds++ )
     {
-        //Variant table =  msexcel.GetTableByName(Worksheet, (*ds).tableName);
         Variant table =  msexcel.GetRangeByName(Worksheet, (*ds).tableName);
-        msexcel.writeDataSetToTableRange(table, (*ds).dataSet, (*ds).fieldNamePrefix);
+        Variant new_range = msexcel.writeDataSetToTableRange(table, (*ds).dataSet, (*ds).fieldNamePrefix);
+
+        msexcel.ChangeNamedRange(table, new_range);
     }
 
-    msexcel.SaveDocument(Workbook, excelExportParams->resultFilename + ".xlsx");
+    if (excelExportParams->resultFilename != "")
+    {
+        msexcel.SaveDocument(Workbook, excelExportParams->resultFilename + ".xlsx");
 
-    VarClear(Worksheet);
-    msexcel.CloseApplication();
-    CoUninitialize();
+        VarClear(Worksheet);
+        msexcel.CloseApplication();
+    }
+    else
+    {
+        msexcel.SetVisible(true);
+    }
+
+    //CoUninitialize();
 
 
     /*// Сначала делаем замену полей

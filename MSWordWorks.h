@@ -66,7 +66,8 @@ NOTICES:
 #include "math.h"
 #include <utilcls.h>
 #include "Comobj.hpp"
-#include "Ora.hpp"
+#include "db.hpp"
+//#include "Ora.hpp"
 
 #include <fstream.h>
 #include "taskutils.h"
@@ -138,6 +139,7 @@ private:
     Variant _documents;
 
 public:
+    void __fastcall SetBuiltInProperty(Variant Document, int property, const String& value);
     String getFieldName(Variant field, int fieldType = 0);
     void __fastcall SetDisplayAlerts(bool flg = true);
     void __fastcall OptimizePerformance(bool flg = true);
@@ -157,6 +159,7 @@ public:
     void __fastcall SetTextToField(Variant Document, String FieldName, WideString Text);
     void __fastcall SetTextToFieldF(Variant Document, String FieldName, WideString Text);
     void __fastcall SetTextToFieldF(Variant Document, int fieldIndex, WideString Text);
+    void __fastcall SetVariableValue(Variant Document, const String& variableName, const String& value);
     Variant __fastcall SetPictureToRange(Variant Document, Variant Range, String PictureFileName);
     Variant __fastcall SetPictureToFormField(Variant Document, Variant Field, String PictureFileName, int Width = 0, int Height = 0);
     Variant __fastcall SetPictureToFormField(Variant Document, int fieldIndex, String PictureFileName, int Width = 0, int Height = 0);

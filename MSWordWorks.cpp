@@ -421,6 +421,59 @@ void __fastcall MSWordWorks::SetTextToField(Variant Document, String FieldName, 
 
 }
 
+/* Задает свойства документа */
+void __fastcall MSWordWorks::SetBuiltInProperty(Variant Document, int property, const String& value)
+{
+    Variant dp = Document.OlePropertyGet("BuiltInDocumentProperties");
+    Variant p = Document.OlePropertyGet("BuiltInDocumentProperties").OlePropertyGet("Item", property);
+    p.OlePropertySet("Value", (OleVariant)value);
+
+/*typedef enum WdBuiltInProperty
+{
+wdPropertyTitle = 1,
+wdPropertySubject = 2,
+wdPropertyAuthor = 3,
+wdPropertyKeywords = 4,
+wdPropertyComments = 5,
+wdPropertyTemplate = 6,
+wdPropertyLastAuthor = 7,
+wdPropertyRevision = 8,
+wdPropertyAppName = 9,
+wdPropertyTimeLastPrinted = 10,
+wdPropertyTimeCreated = 11,
+wdPropertyTimeLastSaved = 12,
+wdPropertyVBATotalEdit = 13,
+wdPropertyPages = 14,
+wdPropertyWords = 15,
+wdPropertyCharacters = 16,
+wdPropertySecurity = 17,
+wdPropertyCategory = 18,
+wdPropertyFormat = 19,
+wdPropertyManager = 20,
+wdPropertyCompany = 21,
+wdPropertyBytes = 22,
+wdPropertyLines = 23,
+wdPropertyParas = 24,
+wdPropertySlides = 25,
+wdPropertyNotes = 26,
+wdPropertyHiddenSlides = 27,
+wdPropertyMMClips = 28,
+wdPropertyHyperlinkBase = 29,
+wdPropertyCharsWSpaces = 30
+} WdBuiltInProperty;*/
+
+    //CustomDocumentProperties = Document.OlePropertyGet("CustomDocumentProperties");
+}
+
+
+void __fastcall MSWordWorks::SetVariableValue(Variant Document, const String& variableName, const String& value)
+{
+    Variant variables = Document.OlePropertyGet("Variables");
+    Variant variable = variables.OleFunction("Item", (OleVariant)variableName);
+    variable.OlePropertySet("Value", (OleVariant)value);
+}
+
+
 /* Преобразует InlineShape в плавающий Shape
    zOrder - положение относительно текста
    4 - перед текстом
@@ -1638,8 +1691,11 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
             {
                 Variant field = fields.OleFunction("Item", it->docFieldIndex );
                 Variant variable = variables.OleFunction("Item", (OleVariant)it->docFieldName);
-                variable.OlePropertySet("Value", it->dsField->AsString.c_str());
-                field.OleFunction("Update");
+                if ( it->dsField->AsString != "" )  // Необходимо, т.к при присвоении "" переменной возникает ошибка "Переменная документа не указана"
+                {
+                    variable.OlePropertySet("Value", it->dsField->AsString.c_str());
+                    field.OleFunction("Update");
+                }
             }
 
         }

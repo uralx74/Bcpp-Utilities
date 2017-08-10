@@ -26,6 +26,7 @@
 #include "MSWordWorks.h"
 #include "MSExcelWorks.h"
 #include <vector>
+#include "taskutils.h"
 
 
 class TDocumentWriterResult
@@ -55,15 +56,29 @@ typedef struct {    // Для описания структуры dbf-файла
 
 /* Excel parameters */
 // Структура для хранения параметров поля (столбца) MS Excel
-typedef struct {    // Для описания формата ячеек в Excel
-    AnsiString format;      // Формат ячейки в Excel
-    AnsiString name;        // Имя поля
+class TExcelField    // Для описания формата ячеек в Excel
+{
+public:
+    TExcelField();
+    String format;      // Формат ячейки в Excel
+    String name;        // Имя поля
     //int title_rows;       // Высота заголовка в строках
     int width;              // Ширина столбца
-    int bwraptext;          // Флаг перенос по словам
-} EXCELFIELD;
+    int bwraptext_head;     // Флаг переноса по словам в шапке таблицы
+    int bwraptext_body;     // Флаг переноса по слова в теле таблицы
+};
+
+TExcelField::TExcelField() :
+    format("@"),
+    name(""),
+    width(-1),
+    bwraptext_head(-1),
+    bwraptext_body(-1)
+{
+}
 
 
+/**/
 class TExcelTableDataSet
 {
 public:
@@ -90,6 +105,17 @@ public:
     String fieldNamePrefix;
 };
 
+class TExcelVtArray
+{
+public:
+    TExcelVtArray(Variant vtArray_, String tableName_):
+        vtArray(vtArray_),
+        tableName(tableName_)
+    {};
+    Variant vtArray;
+    String tableName;
+};
+
 
 
 // Структура для хранения параметров экспорта в MS Excel
@@ -98,29 +124,45 @@ public:
     String id;
     String label;
     //bool fDefault;
-    String templateFilename;       // Имя файла шаблона Excel
+    Variant templateDocument;       // Шаблон документа
+    String templateFilename;        // Имя файла шаблона Excel  (если не задан templateDocument)
     String resultFilename;
-    AnsiString title_label;         // Строка - выводимая в качестве заголовка в отчете Excel (перенести в отдельную структуру)
 
+    // Для автоматического создания шаблона
+    String title_label;             // Строка - выводимая в качестве заголовка в отчете Excel (перенести в отдельную структуру)
     int title_height;               // Высота заголовка в строках  (перенести в отдельную структуру)
-    std::vector<EXCELFIELD> Fields;     // Список полей для экспорта в файл MS Excel
+    std::vector<TExcelField> Fields; // Список полей для экспорта в файл MS Excel
     String table_range_name;        // Имя диапазона табличной части (при выводе в шаблон)
-    bool fUnbounded;                    // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
+    bool fUnbounded;                // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
 
+    // Для работы с шаблонами
     void addTableDataSet(TDataSet* dataSet, const String& tableName, const String& fieldNamePrefix = "");
     void addSingleDataSet(TDataSet* dataSet, const String& fieldNamePrefix = "");
     std::vector<TExcelTableDataSet> tableDs;   // Источники данных для заполнения таблиц
     std::vector<TExcelSingleDataSet> singleDs;   // Источники данных для заполнения отдельных полей
+
+    void addTableVtArray(Variant vtArray, const String& tableName);
+    std::vector<TExcelVtArray> tableVtArray;   // Источники данных для заполнения отдельных полей
+
+
 };
 
+/* Добавляет DataSet в список для Таблиц */
 void TExcelExportParams::addTableDataSet(TDataSet* dataSet, const String& tableName, const String& fieldNamePrefix)
 {
     tableDs.push_back(TExcelTableDataSet(dataSet, tableName, fieldNamePrefix));
 }
 
+/* Добавляет DataSet в список для отдельных полей*/
 void TExcelExportParams::addSingleDataSet(TDataSet* dataSet, const String& fieldNamePrefix)
 {
     singleDs.push_back( TExcelSingleDataSet(dataSet, fieldNamePrefix) );
+}
+
+/* Добавляет массив Variant */
+void TExcelExportParams::addTableVtArray(Variant vtArray, const String& tableName)
+{
+    tableVtArray.push_back( TExcelVtArray(vtArray, tableName) );
 }
 
 
@@ -223,6 +265,10 @@ public:
     void __fastcall ExportToExcelTemplate(TExcelExportParams* excelExportParams);
 
     void __fastcall ExportToWordTemplate(TWordExportParams* wordExportParams);  // Заполнение отчета Word на базе шаблона
+
+    void __fastcall ExportToExcel(TExcelExportParams* excelExportParams);
+
+    Variant __fastcall CreateExcelTemplate(TExcelExportParams* excelExportParams);  
 
     //void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
     //void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
