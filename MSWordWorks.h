@@ -137,9 +137,12 @@ class MSWordWorks
 {
 private:
     Variant _documents;
+    void FixAfterProcessingHeadersAndFooters(Variant Document);
+
 
 public:
     void __fastcall SetBuiltInProperty(Variant Document, int property, const String& value);
+    String deletePrefix(String value, String prefix);
     String getFieldName(Variant field, int fieldType = 0);
     void __fastcall SetDisplayAlerts(bool flg = true);
     void __fastcall OptimizePerformance(bool flg = true);
@@ -190,13 +193,25 @@ public:
 
     std::vector<String> ExportToWordFields(TDataSet* QTable, Variant Document, const String& resultPath, int PagePerDocument);
     void ReplaceFormFields(Variant Document, TDataSet* dataSet);
-    void ReplaceVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix = "");
+
+    void ReplaceVariables_(Variant Document, TDataSet* dataSet, Variant Fields, TDocFieldType fieldType = DFT_DOCVARIABLE, const String& fieldNamePrefix = "");
+    void ReplaceVariablesAll(Variant Document, TDataSet* dataSet, TDocFieldType fieldType = DFT_DOCVARIABLE, const String& fieldNamePrefix = "");
+    void ReplaceVariablesDocumentBody(Variant Document, TDataSet* dataSet, TDocFieldType fieldType = DFT_DOCVARIABLE, const String& fieldNamePrefix = "");
+    void ReplaceVariablesHeadersAndFooters(Variant Document, TDataSet* dataSet, TDocFieldType fieldType = DFT_DOCVARIABLE, const String& fieldNamePrefix = "");
+
+
     void ReplaceImageVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix = "");
 
     std::vector<TFieldLink> assignDataSetToRangeFields(Variant fields, TDocFieldType fieldType, TDataSet* dataSet, const String& fieldNamePrefix = "");
     void writeDataSetToTable(Variant table, TDataSet* dataSet, const String& fieldNamePrefix = "");
-    void MSWordWorks::updateFields(Variant fields, int fieldType);
+    void UpdateFields(Variant fields, int fieldType=-1, const String& fieldNamePrefix = "");
+    void UpdateFieldsHeadersAndFooters(Variant Document, int fieldType=-1, const String& fieldNamePrefix = "");
+
+    void UpdateAllFields(Variant Document, int fieldType=-1, const String& fieldNamePrefix = "");
+    void UpdateAllFieldsFast(Variant Document);
     void UnlinkFields(Variant fields);
+    void UnlinkAllFields(Variant Document);
+
 
    	Variant WordApp;
     HWND Handle;

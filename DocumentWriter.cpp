@@ -32,7 +32,7 @@ void __fastcall TDocumentWriterResult::appendResultFiles(std::vector<String> fil
 void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExportParams)
 // TDataSet *QueryMerge, TDataSet *QueryFormFields)
 {
-    CoInitialize(NULL);
+    //CoInitialize(NULL);
     _result.clear();
 
 
@@ -102,7 +102,7 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
     /* Меняем одиночные поля - текст*/
     for (std::vector<TWordSingleDataSet>::iterator ds = wordExportParams->singleTextDs.begin(); ds != wordExportParams->singleTextDs.end(); ds++ )
     {
-        msword.ReplaceVariables(wordDocument, (*ds).dataSet, (*ds).fieldNamePrefix);
+        msword.ReplaceVariablesAll(wordDocument, (*ds).dataSet, DFT_DOCVARIABLE, (*ds).fieldNamePrefix); 
     }
 
     /* Меняем одиночные поля - FORMTEXT */
@@ -119,6 +119,10 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         msword.writeDataSetToTable(table, (*ds).dataSet, (*ds).fieldNamePrefix);
     }
 
+    // Обновляем значения в колонтитулах
+    //UpdateFieldsHeadersAndFooters
+    msword.UpdateAllFieldsFast(wordDocument);  // До конца не проверена 2017-08-24
+
     /* И наконец делаем слияние */
     for (std::vector<TWordMergeDataSet>::iterator ds = wordExportParams->mergeDs.begin(); ds != wordExportParams->mergeDs.end(); ds++ )
     {
@@ -127,19 +131,29 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         _result.appendResultFiles(vResults);
     }
 
+
+
     // Если не было слияния, то сохраняем текущий документ (иначе при файлы с результатом сохраняются в процедуре слияния)
     if (wordExportParams->mergeDs.size() == 0)
     {
+        //2017-08-23
+        //msword.UpdateFields(wordDocument.OlePropertyGet("Sections").OlePropertyGet("Fields"),64);
+        //msword.UpdateFields(wordDocument.OlePropertyGet("Fields"),64);
+        //msword.UpdateAllFields(wordDocument);
+
         // Преобразуем все поля в значения
-        msword.UnlinkFields(wordDocument.OlePropertyGet("Fields"));
+        //msword.UnlinkFields(wordDocument.OlePropertyGet("Fields"));
+        msword.UnlinkAllFields(wordDocument);
+
         // Сохраняем
         msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename + ".doc");
     }
 
+
     VarClear(wordDocument);
     msword.CloseApplication();
 
-    CoUninitialize();
+    //CoUninitialize();
 
 
     /*if ()

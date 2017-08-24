@@ -1373,16 +1373,66 @@ void MSWordWorks::ReplaceFormFields(Variant Document, TDataSet* dataSet)
     }
 }
 
+void MSWordWorks::ReplaceVariablesAll(Variant Document, TDataSet* dataSet, TDocFieldType fieldType, const String& fieldNamePrefix)
+{
+    ReplaceVariablesDocumentBody(Document, dataSet, fieldType, fieldNamePrefix);   // Тело документа
+    ReplaceVariablesHeadersAndFooters(Document, dataSet, fieldType, fieldNamePrefix);   // Колонтитулы
+}
+
 /* Заменяет поля DOCVARIABLE
    Сопоставляет поля из DataSet и DOCVARIABLE
    Создает Variables в соответствии с именами полей DOCVARIABLE
    Задает значения этих Variables
    и Обновляет поля DOCVARIABLE
 */
-void MSWordWorks::ReplaceVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
+void MSWordWorks::ReplaceVariablesDocumentBody(Variant Document, TDataSet* dataSet, TDocFieldType fieldType, const String& fieldNamePrefix)
 {
     Variant fields = Document.OleFunction("Range").OlePropertyGet("Fields");
-    std::vector<TFieldLink> links = assignDataSetToRangeFields(fields, DFT_DOCVARIABLE, dataSet, fieldNamePrefix);
+    ReplaceVariables_(Document, dataSet, fields, fieldType, fieldNamePrefix);
+}
+
+/* Обновляет значение полей в колонтитулах во всех разделах */
+void MSWordWorks::ReplaceVariablesHeadersAndFooters(Variant Document, TDataSet* dataSet, TDocFieldType fieldType, const String& fieldNamePrefix)
+{
+    // Обновляем поля в колонтитулах во всех разделах
+    Variant sections = Document.OlePropertyGet("Sections"); // Разделы
+    int sectionsCount = sections.OlePropertyGet("Count");
+    for (int i = 1; i <= sectionsCount; i++)
+    {
+        Variant section = sections.OleFunction("Item", i);
+
+        // Верхний колонтитул
+        Variant headers = section.OlePropertyGet("Headers");
+        int headersCount = headers.OlePropertyGet("Count");
+        for (int j = 1; j <= headersCount; j++)
+        {
+            Variant header = headers.OleFunction("Item", j);
+
+            //
+            ReplaceVariables_(Document, dataSet, header.OlePropertyGet("Range").OlePropertyGet("Fields"), fieldType, fieldNamePrefix);
+        }
+
+        // Нижний колонтитул
+        Variant footers = section.OlePropertyGet("Footers");
+        int footersCount = footers.OlePropertyGet("Count");
+        for (int j = 1; j <= footersCount; j++)
+        {
+            Variant footer = footers.OleFunction("Item", j);
+
+            //
+            ReplaceVariables_(Document, dataSet, footer.OlePropertyGet("Range").OlePropertyGet("Fields"), fieldType, fieldNamePrefix);
+        }
+
+    }
+
+    FixAfterProcessingHeadersAndFooters(Document);  // Исправление глюка
+}
+
+
+/* Test */
+void MSWordWorks::ReplaceVariables_(Variant Document, TDataSet* dataSet, Variant Fields, TDocFieldType fieldType, const String& fieldNamePrefix)
+{
+    std::vector<TFieldLink> links = assignDataSetToRangeFields(Fields, fieldType, dataSet, fieldNamePrefix);
 
     if ( links.size() == 0 || !dataSet->Active || dataSet->Eof)     // Если кол-во сопоставленных полей = 0, то выходим
     {
@@ -1404,6 +1454,7 @@ void MSWordWorks::ReplaceVariables(Variant Document, TDataSet* dataSet, const St
         }
     }
 }
+
 
 /* Заменяет поля DOCVARIABLE на изображения */
 void MSWordWorks::ReplaceImageVariables(Variant Document, TDataSet* dataSet, const String& fieldNamePrefix)
@@ -1560,6 +1611,25 @@ String MSWordWorks::getFieldName(Variant field, int fieldType)
     return text.SubString(p1, p2 - p1);
 }
 
+/* Удаляет префикс из строки */
+String MSWordWorks::deletePrefix(String value, String prefix)
+{
+    int prefixLength = prefix.Length();
+    if (prefixLength == 0)
+    {
+        return value;
+    }
+    int valueLength = value.Length();
+    if ( value.Pos(prefix) == 1 && prefixLength < valueLength)
+    {
+        return value.SubString(prefixLength + 1, valueLength - prefixLength);
+    }
+    else
+    {
+        return "";
+    }
+}
+
 /* Возвращает список для привязки полей из dataSet к table
 */
 std::vector<TFieldLink> MSWordWorks::assignDataSetToRangeFields(Variant fields, TDocFieldType fieldType, TDataSet* dataSet, const String& fieldNamePrefix)
@@ -1710,7 +1780,7 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
     {
         // Обновляем значения полей в строке итогов
         Variant fields = rowTmp.OlePropertyGet("Range").OlePropertyGet("Fields");
-        updateFields(fields, 34);
+        UpdateFields(fields, 34);
     }
     else
     {
@@ -1726,14 +1796,20 @@ void MSWordWorks::writeDataSetToTable(Variant table, TDataSet* dataSet, const St
 
 /* Обновляет значения в полях определенного типа
 */
-void MSWordWorks::updateFields(Variant fields, int fieldType)
+void MSWordWorks::UpdateFields(Variant fields, int fieldType, const String& fieldNamePrefix)
 {
+    // 2017-08-23 проверить функцию целиком!!!!
+
     int n = fields.OlePropertyGet("Count");
 
     for (int i = 1; i <= n; i++ )         // цикл по полям в строке
     {
         Variant field = fields.OleFunction("Item", i);
-        if (field.OlePropertyGet("Type") == fieldType)
+
+        String fieldName = getFieldName(field);
+        //.OlePropertyGet("Name");
+
+        if ((fieldType = -1 || field.OlePropertyGet("Type") == fieldType) && (fieldNamePrefix=="" || fieldName == deletePrefix(fieldName,fieldNamePrefix) ) )
         {
             field.OleFunction("Update");
         }
@@ -1741,12 +1817,124 @@ void MSWordWorks::updateFields(Variant fields, int fieldType)
 }
 
 
-/* Преобразует поля в значения
+
+
+/* Обновляет значение полей в колонтитулах во всех разделах */
+void MSWordWorks::UpdateFieldsHeadersAndFooters(Variant Document, int fieldType, const String& fieldNamePrefix)
+{
+    // Обновляем поля в колонтитулах во всех разделах
+    Variant sections = Document.OlePropertyGet("Sections"); // Разделы
+    int sectionsCount = sections.OlePropertyGet("Count");
+    for (int i = 1; i <= sectionsCount; i++)
+    {
+        Variant section = sections.OleFunction("Item", i);
+
+        // Верхний колонтитул
+        Variant headers = section.OlePropertyGet("Headers");
+        int headersCount = headers.OlePropertyGet("Count");
+        for (int j = 1; j <= headersCount; j++)
+        {
+            Variant header = headers.OleFunction("Item", j);
+            UpdateFields(header.OlePropertyGet("Range").OlePropertyGet("Fields"), fieldType, fieldNamePrefix);
+        }
+
+        // Нижний колонтитул
+        Variant footers = section.OlePropertyGet("Footers");
+        int footersCount = footers.OlePropertyGet("Count");
+        for (int j = 1; j <= footersCount; j++)
+        {
+            Variant footer = footers.OleFunction("Item", j);
+            UpdateFields(footer.OlePropertyGet("Range").OlePropertyGet("Fields"), fieldType, fieldNamePrefix);
+        }
+
+    }
+
+    FixAfterProcessingHeadersAndFooters(Document);  // Исправление глюка
+}
+
+
+
+/* Обновляет все поля в документе */
+void MSWordWorks::UpdateAllFields(Variant Document, int fieldType, const String& fieldNamePrefix)
+{
+    // Обновляем поля в теле документа
+    UpdateFields(Document.OlePropertyGet("Fields"), fieldType, fieldNamePrefix);
+
+    UpdateFieldsHeadersAndFooters(Document, fieldType, fieldNamePrefix);
+
+
+    // Обновление разделов содержания  2017-06-23 Uncompleted
+    //ActiveDocument.TablesOfContents(1).Update
+}
+
+
+/* Обновляет все поля в документе */
+void MSWordWorks::UpdateAllFieldsFast(Variant Document)
+{
+    Document.OleProcedure("PrintPreview");
+    Document.OleProcedure("ClosePrintPreview");
+}
+
+
+/* Исправление после работы с верхним и нижним колонтитулом
+   Исправляет глюк с отступом тела документа от верхнего края границы листа,
+   возникающий про обращении к полям в колонтитулах
+*/
+void MSWordWorks::FixAfterProcessingHeadersAndFooters(Variant Document)
+{
+    Variant window = Document.OlePropertyGet("ActiveWindow");
+    Variant view = window.OlePropertyGet("View");
+    view.OlePropertySet("SeekView", 9);     // wdSeekCurrentPageHeader = 9
+    view.OlePropertySet("SeekView", 0);     // wdSeekMainDocument = 0
+}
+
+
+
+/* Преобразует поля в простые значения
 */
 void MSWordWorks::UnlinkFields(Variant fields)
 {
     fields.OleFunction("Unlink");
 }
+
+/* Преобразует все поля в документе в простые значения
+*/
+void MSWordWorks::UnlinkAllFields(Variant Document)
+{
+    // Сначала преобразуем поля в теле документа
+    UnlinkFields(Document.OlePropertyGet("Fields"));
+
+    // Затем в колонтитулах
+    Variant sections = Document.OlePropertyGet("Sections");
+    int sectionsCount = sections.OlePropertyGet("Count");
+
+    for (int i = 1; i <= sectionsCount; i++)
+    {
+        Variant section = sections.OleFunction("Item", i);
+
+        // Верхний колонтитул
+        Variant headers = section.OlePropertyGet("Headers");
+        int headersCount = headers.OlePropertyGet("Count");
+        for (int j = 1; j <= headersCount; j++)
+        {
+            Variant header = headers.OleFunction("Item", j);
+            UnlinkFields(header.OlePropertyGet("Range").OlePropertyGet("Fields"));
+        }
+
+        // Нижний колонтитул
+        Variant footers = section.OlePropertyGet("Footers");
+        int footersCount = footers.OlePropertyGet("Count");
+        for (int j = 1; j <= footersCount; j++)
+        {
+            Variant footer = footers.OleFunction("Item", j);
+            UnlinkFields(footer.OlePropertyGet("Range").OlePropertyGet("Fields"));
+        }
+    }
+
+    FixAfterProcessingHeadersAndFooters(Document);
+
+}
+
 
 
 /*
