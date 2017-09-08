@@ -1,4 +1,4 @@
-#include "MSWordWorks.h"
+#include "WordUtil.h"
 #include <cassert>
 
 using namespace strtools;

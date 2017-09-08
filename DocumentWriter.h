@@ -23,12 +23,14 @@
 #include "OraDataTypeMap.hpp"
 //#include "odacutils.h"
 //#include "math.h"
-#include "MSWordWorks.h"
-#include "MSExcelWorks.h"
+#include "WordUtil.h"
+#include "ExcelUtil.h"
+#include "DbfUtil.h"
 #include <vector>
 #include "taskutils.h"
 
 
+/* Класс для хранения результатов работы объектов*/
 class TDocumentWriterResult
 {
 public:
@@ -38,20 +40,18 @@ public:
     void __fastcall clear();
 };
 
+/* Dbf */
+class TDbaseExportParams {
+public:
+    String resultFilename;
+    TOraQuery *srcDataSet;
 
-// Структура для хранения параметров поля (столбца) DBASE
-typedef struct {    // Для описания структуры dbf-файла
-    String type;    // Тип fieldtype is a single character [C,D,F,L,M,N]
-    String name;    // Имя поля (до 10 символов).
-    int length;         // Длина поля
-    int decimals;       // Длина десятичной части
-    // Character 	 1-255
-    // Date	  8
-    // Logical	  1
-    // Memo	  10
-    // Numeric	1-30
-    // Decimals is 0 for non-numeric, number of decimals for numeric.
-} DBASEFIELD;
+    String id;          // Идентификатор
+    //String label;   // Не используется
+    //bool fDefault;  // Не используется
+    bool fDisableUnassignedFields;    // Разрешить неприкрепленные поля (мб использовать required из списка полей?)
+    TDbfFieldList Fields;    // Список полей для экспорта в файл DBF
+};
 
 
 /* Excel parameters */
@@ -118,6 +118,7 @@ public:
 
 
 
+
 // Структура для хранения параметров экспорта в MS Excel
 class TExcelExportParams  {
 public:
@@ -143,8 +144,6 @@ public:
 
     void addTableVtArray(Variant vtArray, const String& tableName);
     std::vector<TExcelVtArray> tableVtArray;   // Источники данных для заполнения отдельных полей
-
-
 };
 
 /* Добавляет DataSet в список для Таблиц */
@@ -203,6 +202,19 @@ public:
 class TWordExportParams
 {
 public:
+    String id;          // Идентификатор параметров
+    AnsiString label;
+    //bool fDefault;
+    //AnsiString template_name;   // Имя файла шаблона MS Word
+    //int page_per_doc;           // Количество страниц на документ MS Word
+    //AnsiString filter_main_field;      // Имя поля из основного запроса для сравнения со значением поля word_filter_sec_field
+    //AnsiString filter_sec_field;       // Имя поля из вспомогательного запроса (см. word_filter_main_field)
+    //AnsiString filter_infix_sec_field; // Имя поля из вспомогательного запроса, значение которого будет присоединено к имени результирующего файла
+
+
+
+
+
     String templateFilename;   // Полное имя файла шаблона MS Word
     String resultFilename;   //
     String imageFilesDirectory;   // Каталог с файлами изображаений, вставляемых в поля [img]
@@ -267,6 +279,7 @@ public:
     void __fastcall ExportToWordTemplate(TWordExportParams* wordExportParams);  // Заполнение отчета Word на базе шаблона
 
     void __fastcall ExportToExcel(TExcelExportParams* excelExportParams);
+    void __fastcall ExportToDbf(TDbaseExportParams* dbaseExportParams);
 
     Variant __fastcall CreateExcelTemplate(TExcelExportParams* excelExportParams);  
 

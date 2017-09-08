@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------
-#ifndef MSWORDWORKS_H
-#define MSWORDWORKS_H
+#ifndef WORDUTIL_H
+#define WORDUTIL_H
 
 /*
 	Класс для работ с документами MS Word

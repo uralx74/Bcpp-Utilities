@@ -149,11 +149,15 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename + ".doc");
     }
 
+    if (!VarIsEmpty(wordDocument))      // Если шаблон открыт
+    {
+        msword.CloseDocument(wordDocument);
+        VarClear(wordDocument);
+    }
 
-    VarClear(wordDocument);
     msword.CloseApplication();
 
-    //CoUninitialize();
+
 
 
     /*if ()
@@ -476,8 +480,7 @@ void __fastcall TDocumentWriter::ExportToWordTemplate_old(const TWordExportParam
 Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* excelExportParams)
 {
     //CoInitialize(NULL);
-
-    //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
+     //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
     MSExcelWorks msexcel;
@@ -491,8 +494,9 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
         Workbook = msexcel.OpenDocument();
         Worksheet1 = msexcel.GetSheet(Workbook, 1);
 
-
+        #ifdef _DEBUG
         msexcel.SetVisible(true);
+        #endif
 
         if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
         {
@@ -512,7 +516,6 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
         catch (...)
         {
         }
-        CoUninitialize();
         String msg = "Ошибка при создании шаблона.\nОбратитесь к системному администратору.";
         throw Exception(msg);
     }
@@ -712,6 +715,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 // ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
 void __fastcall TDocumentWriter::ExportToExcel(TExcelExportParams* excelExportParams)
 {
+   _result.clear();
     //bool fDone = false;
 
     // Создаем шаблон
@@ -833,6 +837,8 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
     {
         msexcel.SaveDocument(Workbook, excelExportParams->resultFilename + ".xlsx");
 
+        _result.addResultFile(excelExportParams->resultFilename + ".xlsx"); // 2017-09-08 Проверить
+
         VarClear(Worksheet);
         msexcel.CloseApplication();
     }
@@ -840,6 +846,77 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
     {
         msexcel.SetVisible(true);
     }
+}
+
+/* Заполнение DBF-файла
+    2017-09-08 проверить
+*/
+void __fastcall TDocumentWriter::ExportToDbf(TDbaseExportParams* dbaseExportParams)
+{
+    _result.clear();
+
+    TDbfUtil dbfUtil;   // Основной объект для работы с Dbf файлом
+
+    // Если флаг allowunassigned = false
+    if (dbaseExportParams->Fields.size() > dbaseExportParams->srcDataSet->FieldCount && dbaseExportParams->fDisableUnassignedFields)
+    {
+        String msg = "Количество требуемых полей превышает количество полей в источнике данных."
+            "\nПожалуйста, обратитесь к системному администратору.";
+        throw Exception(msg);
+    }
+
+    if (dbaseExportParams->Fields.size() == 0)
+    {
+        String msg = "Не задан список полей в параметрах экспорта."
+            "\nПожалуйста, обратитесь к системному администратору.";
+        throw Exception(msg);
+    }
+
+
+    // Создаем dbf-файл назначения
+    TDbf* pTable = dbfUtil.CreateDbf(dbaseExportParams->resultFilename, &dbaseExportParams->Fields);
+
+    // Открываем созданный файл на запись
+    pTable->Exclusive = true;
+    try
+    {
+        pTable->Open();
+    }
+    catch (Exception &e)
+    {
+        delete pTable;
+        throw ("Не удалось открыть файл на запись.\n" + e.Message);
+    }
+
+
+    // Сохранение данных из датасета в файл
+    try
+    {
+        dbfUtil.WriteToDbf(dbaseExportParams->srcDataSet, pTable);
+        _result.addResultFile(dbaseExportParams->resultFilename);   // 2017-09-08 Проверить
+        pTable->Close();
+    }
+    catch(Exception &e)
+    {
+        delete pTable;
+        throw ("Не удалось заполнить файл.\n" + e.Message );
+    }
+
+    delete pTable;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     //CoUninitialize();
 
@@ -911,7 +988,7 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
     // В дальнейшем сделать аналогично выгрузке в MS Word
     // обьединение двух таблиц QueryFields и QueryTable
     */
-}
+
 
 
 

@@ -1,4 +1,4 @@
-#include "MSExcelWorks.h"
+#include "ExcelUtil.h"
 
 using namespace strtools;
 //----------------------------------------------------------------------------
