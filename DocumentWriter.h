@@ -60,6 +60,7 @@ class TExcelField    // Для описания формата ячеек в Excel
 {
 public:
     TExcelField();
+    ~TExcelField();
     String format;      // Формат ячейки в Excel
     String name;        // Имя поля
     //int title_rows;       // Высота заголовка в строках
@@ -76,6 +77,10 @@ TExcelField::TExcelField() :
     bwraptext_body(-1)
 {
 }
+TExcelField::~TExcelField()
+{
+}
+
 
 
 /**/
@@ -135,6 +140,9 @@ public:
     std::vector<TExcelField> Fields; // Список полей для экспорта в файл MS Excel
     String table_range_name;        // Имя диапазона табличной части (при выводе в шаблон)
     bool fUnbounded;                // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
+    String link_field_left;
+    String link_field_right;
+
 
     // Для работы с шаблонами
     void addTableDataSet(TDataSet* dataSet, const String& tableName, const String& fieldNamePrefix = "");
@@ -144,6 +152,8 @@ public:
 
     void addTableVtArray(Variant vtArray, const String& tableName);
     std::vector<TExcelVtArray> tableVtArray;   // Источники данных для заполнения отдельных полей
+
+    Variant findTableVtArray(const String& tableName);
 };
 
 /* Добавляет DataSet в список для Таблиц */
@@ -162,6 +172,19 @@ void TExcelExportParams::addSingleDataSet(TDataSet* dataSet, const String& field
 void TExcelExportParams::addTableVtArray(Variant vtArray, const String& tableName)
 {
     tableVtArray.push_back( TExcelVtArray(vtArray, tableName) );
+}
+
+/* Находит таблицу по имени */
+Variant TExcelExportParams::findTableVtArray(const String& tableName)
+{
+    for (std::vector<TExcelVtArray>::iterator it = tableVtArray.begin(); it != tableVtArray.end(); it++ )
+    {
+        if (it->tableName == tableName)
+        {
+            return it->vtArray;
+        }
+    }
+    return Variant();
 }
 
 

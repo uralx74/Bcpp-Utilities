@@ -62,7 +62,7 @@ bool TOraLogger::WriteLog(const AnsiString& funcName, const AnsiString& threadId
 
     //_oraQueryLog->ParamByName("p_prnt_thread_id")->Value = (threadId == "" ? "" : _appId);
     //_oraQueryLog->ParamByName("p_thread_id")->Value = ( threadId == "" ? _appId : threadId;
-    _oraQueryLog->ParamByName("p_descr")->Value = descr;
+    _oraQueryLog->ParamByName("p_descr")->Value = descr.SubString(0,100);
     _oraQueryLog->ParamByName("p_pc_mac")->Value = _osMacAddress;
     _oraQueryLog->ParamByName("p_task_name")->Value = _taskName;
     _oraQueryLog->ParamByName("p_func_name")->Value = funcName;

@@ -479,8 +479,10 @@ void __fastcall TDocumentWriter::ExportToWordTemplate_old(const TWordExportParam
 */
 Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* excelExportParams)
 {
+
+
     //CoInitialize(NULL);
-     //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
+    //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
     MSExcelWorks msexcel;
@@ -544,12 +546,6 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 
     Variant data_head;
 
-    //Variant data_body;
-    //TDataFormat df_body;            // Переделать на Cellformat
-    //df_body.reserve(FieldCount);
-
-
-
     int ExcelFieldCount = excelExportParams->Fields.size();
 
     std::vector<TCellFormat> cf_tablebody;
@@ -568,7 +564,11 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
             // Задаем формат столбцов в таблице Excel
             String sCellFormat;
 
-            data_head.PutElement(field->DisplayName, 1, j);
+            //data_head.PutElement(field->DisplayName.c_str(), 1, j);
+            data_head.PutElement(Variant(field->DisplayName), 1, j);  // 2017-09-14
+            //data_head.PutElement(Variant(field->Index), 1, j);
+
+
             switch (field->DataType) {  // Нужно тестирование и доработка (добавить форматы и тд.)
             case ftString:
                 sCellFormat = "@";
@@ -593,6 +593,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
             }
 
             TExcelField ef;
+
             ef.name = field->DisplayName;
             ef.format = sCellFormat;
             excelExportParams->Fields.push_back(ef);
@@ -611,7 +612,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 
         for (unsigned int j = 0; j < ExcelFieldCount; j++)
         {
-            data_head.PutElement(excelExportParams->Fields[j].name, 1, j+1);
+            data_head.PutElement(excelExportParams->Fields[j].name.c_str(), 1, j+1);
 
             cf_tablehead_tmp.BorderStyle = TCellFormat::xlContinuous;
             cf_tablehead_tmp.FontStyle = cf_tablehead_tmp.FontStyle << TCellFormat::fsBold;
@@ -641,7 +642,6 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
     }
 
 
-
     // Раздел - Заголовок документа
     Variant range_doc_title = msexcel.GetRange(Worksheet1, 1, 1, 1, 1);
     msexcel.AddName(Workbook, "report_title", range_doc_title);
@@ -665,31 +665,32 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
     //cf_cre_dttm.bWrapText = excelExportParams->Fields[j].bwraptext_head;
     msexcel.SetRangeFormat(range_cre_dttm, cf_cre_dttm);
 
+     // Раздел параметров
+    //excelExportParams->
 
-    // Раздел параметров
-    
-    Variant range_parameters = msexcel.GetRange(Worksheet1, 3, 1, 1, FieldCount);
-    msexcel.AddName(Workbook, "report_parameters", range_parameters);
-
-    TCellFormat cf_parameters;   // Временный объект для форматирования ячейки тела таблицы
-    cf_parameters.bSetFontColor = true;
-    cf_parameters.FontColor = clBlue;
-    //cf_parameters.FontStyle = cf_parameters.FontStyle << TCellFormat::fsBold;
-    msexcel.SetRangeFormat(range_parameters, cf_parameters);
-
+    int currentRowNumber = 3;
+    if ( !VarIsEmpty(excelExportParams->findTableVtArray("report_parameters")) )  // Если есть данные для раздела report_parameters
+    {
+        Variant range_parameters = msexcel.GetRange(Worksheet1, 3, 1, 1, FieldCount);
+        msexcel.AddName(Workbook, "report_parameters", range_parameters);
+        TCellFormat cf_parameters;   // Временный объект для форматирования ячейки тела таблицы
+        cf_parameters.bSetFontColor = true;
+        cf_parameters.FontColor = clBlue;
+        //cf_parameters.FontStyle = cf_parameters.FontStyle << TCellFormat::fsBold;
+        msexcel.SetRangeFormat(range_parameters, cf_parameters);
+        currentRowNumber++;
+    }
 
 
     // Шапка таблицы
-    Variant range_tablehead = msexcel.GetRange(Worksheet1, 4, 1, 1, FieldCount);
+    Variant range_tablehead = msexcel.GetRange(Worksheet1, currentRowNumber++, 1, 1, FieldCount);
     msexcel.AddName(Workbook, "table_head", range_tablehead);
     msexcel.WriteTableToRange(range_tablehead, data_head, 1, 1, false);
     //Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
+     msexcel.SetRangeColumnsFormat(range_tablehead, cf_tablehead);
 
-    msexcel.SetRangeColumnsFormat(range_tablehead, cf_tablehead);
+    Variant range_tablebody = msexcel.GetRange(Worksheet1, currentRowNumber, 1, 1, FieldCount);
 
-
-
-    Variant range_tablebody = msexcel.GetRange(Worksheet1, 5,1,1,FieldCount);
     msexcel.AddName(Workbook,"table_body", range_tablebody);
     //msexcel.SetRangeColumnsFormat(range_tablebody, df_body);
     msexcel.SetRangeColumnsFormat(range_tablebody, cf_tablebody);
@@ -700,13 +701,24 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
     {
         TField* field = tableDs->Fields->FieldByNumber(i);
         Variant cell = msexcel.GetRangeFromRange(range_tablebody, 1, i, 1, 1);
-        msexcel.AddName(Workbook, "table_column_" + field->DisplayName, cell);
+        try
+        {
+            msexcel.AddName(Workbook, Variant("table_column_" + field->DisplayName), cell);  // 2017-09-11
+        }
+        catch (Exception &e)
+        {
+            //throw Exception("test " + field->DisplayName + " " + IntToStr(field->Index) + " " + field->DisplayLabel + " " + field->FullName);
+            VarClear(data_head);
+            msexcel.CloseWorkbook(Workbook);
+            msexcel.CloseApplication();
+            throw Exception("Ошибка при создании шаблона. Использовано недопустимое имя для ячейки таблицы \"" + field->DisplayName + "\"");
+        }
     }
+
 
     // Таблица для текста запроса
     Variant range_query_text = msexcel.GetRange(Worksheet2, 1, 1, 1, 1);
     msexcel.AddName(Workbook, "report_query_text", range_query_text);
-
 
     return Workbook;
 }
@@ -716,13 +728,31 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 void __fastcall TDocumentWriter::ExportToExcel(TExcelExportParams* excelExportParams)
 {
    _result.clear();
-    //bool fDone = false;
 
-    // Создаем шаблон
-    Variant Workbook = excelExportParams->templateDocument = CreateExcelTemplate(excelExportParams);
+    Variant Workbook;
 
     MSExcelWorks msexcel;
-    msexcel.AssignDocument(Workbook);
+
+    //if (excelExportParams->templateFilename == "")
+    //{
+        // Создаем шаблон
+        try
+        {
+            Workbook = CreateExcelTemplate(excelExportParams);
+        }
+        catch(Exception &e)
+        {
+            throw Exception(e.Message);  // 2017-09-14 Без этого выше не ловит исключения при запуске из проводника
+        }
+        msexcel.AssignDocument(Workbook);   // Присоединяем к объекту
+    /*}
+    else
+    {
+        // или открываем шаблон из файла
+        Workbook = msexcel.OpenDocument(excelExportParams->templateFilename);
+
+    }  */
+
     Variant Worksheet1 = msexcel.GetSheet(Workbook, 1);
 
     Variant range_doc_title = msexcel.GetRangeByName(Worksheet1, "report_title");
@@ -731,9 +761,8 @@ void __fastcall TDocumentWriter::ExportToExcel(TExcelExportParams* excelExportPa
     Variant range_cre_dttm = msexcel.GetRangeByName(Worksheet1, "report_cre_dttm");
     msexcel.WriteToRange(range_cre_dttm, "По состоянию на: " + TDateTime::CurrentDateTime());
 
-    //msexcel.WriteToCell(Worksheet1,"helo",2, 1);
-
-
+    // Устанавливаем параметры экспорта (назначаем документ-шаблон)
+    excelExportParams->templateDocument = Workbook;
 
     // Выводим данные
     ExportToExcelTemplate(excelExportParams);
@@ -766,6 +795,12 @@ void __fastcall TDocumentWriter::ExportToExcel(TExcelExportParams* excelExportPa
 
     VarClear(data_body);
     data_body = NULL;*/
+
+    /*if(false)
+    {
+        throw Exception("test");
+    }  */
+
 
 }
 
@@ -812,9 +847,12 @@ void __fastcall TDocumentWriter::ExportToExcelTemplate(TExcelExportParams* excel
     /* Выводим Variant array */
     for (std::vector<TExcelVtArray>::iterator vtArrayIt = excelExportParams->tableVtArray.begin(); vtArrayIt != excelExportParams->tableVtArray.end(); vtArrayIt++ )
     {
+        //if ( VarIsEmpty((*vtArrayIt).vtArray) ) //2017-09-11
+        //{
+        //    continue;
+        //}
         Variant table =  msexcel.GetRangeByNameGlobal(Workbook, (*vtArrayIt).tableName);
         Variant new_range = msexcel.WriteTableToRange(table, (*vtArrayIt).vtArray, 1, 1, true);
-
         msexcel.ChangeNamedRange(table, new_range);
     }
 
@@ -885,7 +923,7 @@ void __fastcall TDocumentWriter::ExportToDbf(TDbaseExportParams* dbaseExportPara
     catch (Exception &e)
     {
         delete pTable;
-        throw ("Не удалось открыть файл на запись.\n" + e.Message);
+        throw Exception("Не удалось открыть файл на запись.\n" + e.Message);
     }
 
 
@@ -899,7 +937,7 @@ void __fastcall TDocumentWriter::ExportToDbf(TDbaseExportParams* dbaseExportPara
     catch(Exception &e)
     {
         delete pTable;
-        throw ("Не удалось заполнить файл.\n" + e.Message );
+        throw Exception("Не удалось заполнить файл.\n" + e.Message );
     }
 
     delete pTable;

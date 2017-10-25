@@ -1262,39 +1262,6 @@ std::vector<TLinkFields> MSExcelWorks::assignDataSetToRangeFields(Variant range,
                 result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
             }
         }
-
-
-        /*
-
-        Variant field = fields.OleFunction("Item", i);
-        String fieldName = getFieldName(field, 64);
-
-        String test = fieldName.SubString(1, prefixLength);
-
-
-        if (prefixLength > 0  )
-        {
-            if ( fieldName.Length() > prefixLength && fieldName.SubString(1, prefixLength) == fieldNamePrefix)
-            {
-                fieldName = fieldName.SubString(prefixLength+1, fieldName.Length() - prefixLength);
-            }
-            else
-            {
-                continue;
-            }
-        }
-
-        if (fieldName != "")
-        {
-            // Сопоставляем поле с полем в источнике
-            //int fieldIndex = field.OlePropertyGet("Index");   //  Это значение является сквозным значением на весь документ
-
-            TField* fieldOfDataSet = dataSet->Fields->FindField(fieldName);
-            if ( fieldOfDataSet )
-            {
-                result.push_back(std::make_pair(fieldOfDataSet->FieldNo, i));
-            }
-        }  */
     }
 
     return result;

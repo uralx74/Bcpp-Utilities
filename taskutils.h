@@ -37,6 +37,10 @@
 
 #include <StrUtils.hpp>
 
+#include <DB.hpp>
+#include "MemDS.hpp"
+#include "VirtualTable.hpp"
+
 
 
 using namespace std;
@@ -1118,6 +1122,106 @@ String TimeBetween()
     sTotalTime = s
 }*/
 
+
+namespace datasettools
+{
+
+/**/
+TDataSet* JoinDataset(TDataSet* dsLeft, TDataSet* dsRight, String LeftKey, String RigthKey)
+{
+    TVirtualTable* ds = new TVirtualTable(NULL);
+
+    ds->FieldDefs->Assign(dsLeft->FieldDefs);
+    ds->Assign(dsLeft);
+
+    try
+    {
+        for(int i = 0; i < dsRight->FieldDefs->Count; i++)
+        {
+        //ds->Fields->Add(dsRight->Fields->FieldByNumber(i+1));
+
+            TFieldDef *newFd = ds->FieldDefs->AddFieldDef();
+            newFd->Name =  dsRight->FieldDefs->Items[i]->Name;  // »мена полей в dsLeft и dsRight не должны пересекатьс€
+            //newFd->Name =  "r_" + dsRight->FieldDefs->Items[i]->Name;
+            newFd->DataType = dsRight->FieldDefs->Items[i]->DataType;
+            newFd->Size = dsRight->FieldDefs->Items[i]->Size;
+            newFd->Precision = dsRight->FieldDefs->Items[i]->Precision;
+        //newFd->DisplayName = "r_" + dsRight->FieldDefs->Items[i]->DisplayName;
+        }
+    }
+    catch(Exception &e)
+    {
+        throw Exception("¬ основном и присоедин€емом запросах пересекающиес€ имена полей.\n" + e.Message);  //////////////////////////////////////////////////////////////////////////////////////////////////// здесь придумать сообщение dfgfd
+    }
+
+    // (dsRight->FieldDefs);
+    //int k2 = ds->Fields->Count;
+    //int k5 = ds->FieldDefs->Count;
+    //ds->FieldDefs->AddFieldDef()
+    ds->Open();
+    ds->Edit();
+
+    //int k3 = dsLeft->Fields->Count;
+    //int k4 = dsRight->Fields->Count;
+
+
+
+
+    dsRight->Filtered = true;
+    for(int i = 0; i < ds->RecordCount; i++ )
+    {
+
+        dsRight->Filter = RigthKey + "='" + ds->FieldByName(LeftKey)->AsString + "'";
+        //dsRight->Refresh();
+
+        if (dsRight->RecordCount > 0)
+        {
+            ds->Edit();
+            for(int srcFieldIndex = 1, dstFieldIndex = dsLeft->Fields->Count + 1; srcFieldIndex <= dsRight->Fields->Count ; srcFieldIndex++, dstFieldIndex ++ )
+            {
+                //ds->FieldByName();
+                //String k01 = ds->Fields->FieldByNumber(1)->DisplayName;
+                //String v01 = ds->Fields->FieldByNumber(1)->Value;
+
+
+                /*String k1 = ds->Fields->FieldByNumber(dstFieldIndex)->DisplayName;
+                Variant v1 = ds->Fields->FieldByNumber(dstFieldIndex)->Value;
+                String k2 = dsRight->Fields->FieldByNumber(srcFieldIndex)->DisplayName;
+                Variant v2 = dsRight->Fields->FieldByNumber(srcFieldIndex)->Value;*/
+
+                 ds->Fields->FieldByNumber(dstFieldIndex)->Value = dsRight->Fields->FieldByNumber(srcFieldIndex)->Value;
+            }
+            ds->Post();
+        }
+        ds->Next();
+
+    }
+
+    ds->First();
+    return ds;
+}
+
+/*  опирование данных из одного DataSet в другой */
+/*void __fastcall TDbfUtil::WriteToDbf(TDataSet* srcTable, TDataSet* dstTable)
+{
+    // —опоставл€ем пол€
+    std::vector<TLinkFields> links = assignDataSet(srcTable, dstTable);
+
+    // «апись данных в таблицу
+    while ( !srcTable->Eof )
+    {
+        dstTable->Append();
+
+        for (std::vector<TLinkFields>::iterator it = links.begin(); it != links.end(); it++)
+        {
+            dstTable->Fields->FieldByNumber(it->second)->Value = srcTable->Fields->FieldByNumber(it->first)->Value;
+        }
+        srcTable->Next();  // ѕереходим к следующей записи
+    }
+    dstTable->Post();
+}*/
+
+} // datasettools
 
 
 #endif TASKUTILS_H

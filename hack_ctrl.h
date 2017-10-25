@@ -61,6 +61,22 @@ void __fastcall RealignControls(TWinControl *parent)
     }
 }
 
+/* Возвращает количество отображаемых элементов в контроле-контейнере */
+int __fastcall GetVisibleControlCount(TCustomControl *ContainerControl)
+{
+    int ControlCount = 0;
+    for(int i=0; i < ContainerControl->ControlCount; i++)
+    {
+        if( ContainerControl->Controls[i]->Visible )
+        {
+            ControlCount++;
+        };
+    }
+    return ControlCount;
+}
+//---------------------------------------------------------------------------
+
+
 /* Возвращет индекс видимой вкладки */
 int PageIndexFromTabIndex(TPageControl* pageControl, int tabIndex)
 {
