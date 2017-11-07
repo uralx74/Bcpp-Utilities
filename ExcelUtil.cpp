@@ -1184,7 +1184,8 @@ String MSExcelWorks::getCellName(Variant cell)
 {
     try
     {
-        return cell.OlePropertyGet("Name").OlePropertyGet("Name");
+        Variant temp = cell.OlePropertyGet("Name");
+        return temp.OlePropertyGet("Name");
     }
     catch(...)  // Если ячейка не имеет имени
     {

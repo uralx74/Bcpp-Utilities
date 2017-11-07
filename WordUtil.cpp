@@ -421,10 +421,17 @@ void __fastcall MSWordWorks::SetTextToField(Variant Document, String FieldName, 
 
 }
 
+/* Возвращает количество полей MailMerge */
+int __fastcall MSWordWorks::GetMailMergeFieldCount(Variant Document)
+{
+    Variant Fields = Document.OlePropertyGet("MailMerge").OlePropertyGet("Fields");
+    return Fields.OlePropertyGet("Count");
+}
+
 /* Задает свойства документа */
 void __fastcall MSWordWorks::SetBuiltInProperty(Variant Document, int property, const String& value)
 {
-    Variant dp = Document.OlePropertyGet("BuiltInDocumentProperties");
+    //Variant dp = Document.OlePropertyGet("BuiltInDocumentProperties");
     Variant p = Document.OlePropertyGet("BuiltInDocumentProperties").OlePropertyGet("Item", property);
     p.OlePropertySet("Value", (OleVariant)value);
 
@@ -687,6 +694,13 @@ void __fastcall MSWordWorks::SaveAsDocument(Variant Document, String FileName/*,
 }
 
 //---------------------------------------------------------------------------
+// Возвращает имя файла документа
+String __fastcall MSWordWorks::GetDocumentFilename(Variant Document)
+{
+    return Document.OlePropertyGet("Fullname");
+}
+
+//---------------------------------------------------------------------------
 //
 void __fastcall MSWordWorks::SetActiveDocument(Variant Document)
 {
@@ -832,9 +846,18 @@ std::vector<String> __fastcall MSWordWorks::MergeDocumentToFiles(Variant Templat
     {
         FileIndex++;
         //AnsiString filename = md.ResultFileNamePrefix + str_pad(IntToStr(FileIndex), nPad, "0", STR_PAD_LEFT) + ".doc";
-        AnsiString counterStr = StrPadL(IntToStr(FileIndex), nPad, "0");
+        String counterStr = StrPadL(IntToStr(FileIndex), nPad, "0");
+
+
+        // Добавляем к имени файла порядковый номер
+        //String filename = ReplaceField(md.resultFilename, "[:counter]", counterStr);
+
+        /* 2017-11-07
         TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
-        AnsiString filename = StringReplace(md.resultFilename, "[:counter]", counterStr, replaceflags);
+        String filename = StringReplace(md.resultFilename, "[:counter]", counterStr, replaceflags);
+        */
+        String filename = ExtractFilePath(md.resultFilename) + ExtractFileName(md.resultFilename) + counterStr + ExtractFileExt(md.resultFilename);   // 2017-11-07
+
 
         Variant ResultDocument = MergeDocument(TemplateDocument, md, i);
 
@@ -849,9 +872,9 @@ std::vector<String> __fastcall MSWordWorks::MergeDocumentToFiles(Variant Templat
         {
             throw Exception("Ошибка при сохранении в файл\n" + filename);
         }
+        vFiles.push_back(GetDocumentFilename(ResultDocument));   // 2017-11-07 Проверить
         CloseDocument(ResultDocument);
 
-        vFiles.push_back(filename);
     }
     //CloseDocument(TemplateDocument);
 
@@ -1152,13 +1175,14 @@ Variant __fastcall MSWordWorks::MergeDocumentFromFile(Variant TemplateDocument, 
     //SQLStatement = "SELECT * FROM [Лист1$]";
     SQLStatement = "SELECT * FROM `Table`";
     SQLStatement1 = "SELECT * FROM `Table`";
-    String chemin, texte;
-    texte = "test";
+    //String chemin, texte;
+    //texte = "test";
 
     MailMerge = TemplateDocument.OlePropertyGet("MailMerge");
     MailMerge.OlePropertySet("MainDocumentType", 0);    // wdFormLetters = 0
     //MailMerge.OleProcedure("OpenDataSource", chemin.c_str(), 1, true, true, false, false, PasswordDocument, PasswordTemplate, false, WritePasswordDocument, WritePasswordTemplate, texte.c_str(), SQLStatement, SQLStatement1, false);
-    MailMerge.OleProcedure("OpenDataSource", DatasetFileName.c_str(), 0, false, false, true, false, PasswordDocument, PasswordTemplate, false, WritePasswordDocument, WritePasswordTemplate, texte.c_str(), SQLStatement, SQLStatement1, false);
+    // 2017-11-07 MailMerge.OleProcedure("OpenDataSource", DatasetFileName.c_str(), 0, false, false, true, false, PasswordDocument, PasswordTemplate, false, WritePasswordDocument, WritePasswordTemplate, texte.c_str(), SQLStatement, SQLStatement1, false);
+    MailMerge.OleProcedure("OpenDataSource", DatasetFileName.c_str(), 0, false, false, true, false, PasswordDocument, PasswordTemplate, false, WritePasswordDocument, WritePasswordTemplate, "", SQLStatement, SQLStatement1, false);
     MailMerge.OlePropertySet("Destination", 0);
     MailMerge.OlePropertySet("SuppressBlankLines", 0);
 
@@ -1180,19 +1204,17 @@ Variant __fastcall MSWordWorks::MergeDocumentFromFile(Variant TemplateDocument, 
     MailMerge.OlePropertyGet("DataSource").OlePropertySet("FirstRecord", FirstRecordIndex);
     MailMerge.OlePropertyGet("DataSource").OlePropertySet("LastRecord", LastRecordIndex);
 
+    // Выполняем слияние
     MailMerge.OleProcedure("Execute", false);
 
-    // Free datasource
+    // Освобождаем набор данных
     MailMerge.OlePropertySet("MainDocumentType", 0xFFFFFFFF);    // wdNotAMergeDocument = 0xFFFFFFFF
 
 
-
-    // Return the new document
+    // Возвращаем новый документ
     WordApp = MailMerge.OlePropertyGet("Application");
     return WordApp.OlePropertyGet("Documents").OleFunction("Item", 1);
 
-
-    //return GetDocument(1);
 
     /*MailMerge.ExecFunction("OpenDataSource") <<XLSFileName               // Name
                                     <<0                         // Format

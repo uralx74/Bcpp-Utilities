@@ -38,6 +38,7 @@ public:
     void __fastcall addResultFile(String filename);
     void __fastcall appendResultFiles(std::vector<String> filenames);
     void __fastcall clear();
+    int __fastcall resultFileCount();
 };
 
 /* Dbf */
@@ -62,7 +63,11 @@ public:
     TExcelField();
     ~TExcelField();
     String format;      // Формат ячейки в Excel
-    String name;        // Имя поля
+    //String name;        // Имя поля
+    String descr;
+    String fieldName; // Временно. потом поменять на name
+    bool visible;
+
     //int title_rows;       // Высота заголовка в строках
     int width;              // Ширина столбца
     int bwraptext_head;     // Флаг переноса по словам в шапке таблицы
@@ -71,10 +76,12 @@ public:
 
 TExcelField::TExcelField() :
     format("@"),
-    name(""),
+    fieldName(""),
+    descr(""),
     width(-1),
     bwraptext_head(-1),
-    bwraptext_body(-1)
+    bwraptext_body(-1),
+    visible(true)
 {
 }
 TExcelField::~TExcelField()
@@ -122,7 +129,7 @@ public:
 };
 
 
-
+typedef std::vector<TExcelField> TExcelFieldList;
 
 // Структура для хранения параметров экспорта в MS Excel
 class TExcelExportParams  {
@@ -137,7 +144,7 @@ public:
     // Для автоматического создания шаблона
     String title_label;             // Строка - выводимая в качестве заголовка в отчете Excel (перенести в отдельную структуру)
     int title_height;               // Высота заголовка в строках  (перенести в отдельную структуру)
-    std::vector<TExcelField> Fields; // Список полей для экспорта в файл MS Excel
+    TExcelFieldList Fields; // Список полей для экспорта в файл MS Excel
     String table_range_name;        // Имя диапазона табличной части (при выводе в шаблон)
     bool fUnbounded;                // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
     String link_field_left;

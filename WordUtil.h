@@ -152,6 +152,7 @@ public:
     void __fastcall SaveAsDocument(Variant Document, String FileName/*, bool fAddToRecentFiles = true*/);
     void __fastcall CloseDocument(Variant Document, bool fCloseAppIfNoDoc = false);
     void __fastcall CloseApplication();
+    String __fastcall GetDocumentFilename(Variant Document);
     Variant __fastcall GetDocument(int DocIndex = -1);
  	Variant __fastcall GetPage(Variant Document, int PageIndex = -1);
     void __fastcall SetActiveDocument(Variant Document);
@@ -188,6 +189,7 @@ public:
     Variant __fastcall MergeDocumentFromFile(Variant TemplateDocument, AnsiString DatasetFileName, int FirstRecordIndex = 0, int PagePerDocument = 0);
     std::vector<String> __fastcall MergeDocumentToFiles(Variant TemplateDocument, MERGETABLE &md);
 
+    int __fastcall MSWordWorks::GetMailMergeFieldCount(Variant Document);
     Variant __fastcall MergeDocument(Variant TemplateDocument, MERGETABLE &md, int StartIndex = 0);
     Variant __fastcall MergeDocument(Variant TemplateDocument, const Variant &ArrayData, int FirstRecordIndex = 0, int PagePerDocument = 0, int titleRowIndex = 0);
 

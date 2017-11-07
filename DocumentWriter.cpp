@@ -17,6 +17,10 @@ void __fastcall TDocumentWriterResult::appendResultFiles(std::vector<String> fil
     resultFiles.insert(resultFiles.end(), filenames.begin(), filenames.end());
 }
 
+int __fastcall TDocumentWriterResult::resultFileCount()
+{
+    return resultFiles.size();
+}
 
 /*
  Заполнение шаблона MS Word
@@ -30,9 +34,8 @@ void __fastcall TDocumentWriterResult::appendResultFiles(std::vector<String> fil
    2. Функция может изменить значение Filter в передаваемых DataSet.
 */
 void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExportParams)
-// TDataSet *QueryMerge, TDataSet *QueryFormFields)
 {
-    //CoInitialize(NULL);
+
     _result.clear();
 
 
@@ -62,8 +65,6 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         #ifndef _DEBUG
         msword.OptimizePerformance(true);
         #endif
-
-
 
         wordDocument =  msword.OpenDocument(wordExportParams->templateFilename, false);
     }
@@ -126,15 +127,17 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
     /* И наконец делаем слияние */
     for (std::vector<TWordMergeDataSet>::iterator ds = wordExportParams->mergeDs.begin(); ds != wordExportParams->mergeDs.end(); ds++ )
     {
+        if (msword.GetMailMergeFieldCount(wordDocument) == 0)
+        {
+            break;
+        }
         std::vector<String> vResults;
         vResults = msword.ExportToWordFields(*ds, wordDocument, wordExportParams->resultFilename, wordExportParams->pagePerDocument);
         _result.appendResultFiles(vResults);
     }
 
-
-
     // Если не было слияния, то сохраняем текущий документ (иначе при файлы с результатом сохраняются в процедуре слияния)
-    if (wordExportParams->mergeDs.size() == 0)
+    if (_result.resultFileCount() == 0)
     {
         //2017-08-23
         //msword.UpdateFields(wordDocument.OlePropertyGet("Sections").OlePropertyGet("Fields"),64);
@@ -146,7 +149,8 @@ void __fastcall TDocumentWriter::ExportToWordTemplate(TWordExportParams* wordExp
         msword.UnlinkAllFields(wordDocument);
 
         // Сохраняем
-        msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename + ".doc");
+        msword.SaveAsDocument(wordDocument, wordExportParams->resultFilename);
+        _result.addResultFile(msword.GetDocumentFilename(wordDocument));
     }
 
     if (!VarIsEmpty(wordDocument))      // Если шаблон открыт
@@ -480,8 +484,6 @@ void __fastcall TDocumentWriter::ExportToWordTemplate_old(const TWordExportParam
 Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* excelExportParams)
 {
 
-
-    //CoInitialize(NULL);
     //String TemplateFullName = excelExportParams->templateFilename; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
@@ -524,7 +526,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 
     msexcel.SetActiveWorksheet(Worksheet1); // Устанавливаем активный лист 1й
 
-    Variant range;
+    //Variant range;
 
     /*Variant range = msexcel.GetRange(Worksheet1, 1,1,1,1);
     msexcel.AddName(Worksheet1,"doc_title", range);
@@ -542,32 +544,26 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 	int RecCount = tableDs->RecordCount;
 
     // Определяем количество полей
-    int FieldCount = tableDs->FieldCount;
+    int datasetFieldCount = tableDs->FieldCount;
 
-    Variant data_head;
 
     int ExcelFieldCount = excelExportParams->Fields.size();
 
     std::vector<TCellFormat> cf_tablebody;
     std::vector<TCellFormat> cf_tablehead;
 
-    if (ExcelFieldCount < FieldCount)   // Заполнение если есть поля в ExcelFields  (если параметры экспорта не заданы)
-    {
-        data_head = vartools::CreateVariantArray(1, FieldCount);         // Шапка таблицы
+    //int fieldCount = 0;
 
+    if (ExcelFieldCount == 0)   // если список полей не задан в параметрах, заполняем исходя из списка полей в DataSet
+    {
         excelExportParams->Fields.clear();
 
         // Формируем шапку таблицы
-        for (int j = 1; j <= FieldCount; j++ )  		// Перебираем все поля
+        for (int j = 1; j <= datasetFieldCount; j++ )  		// Перебираем все поля
         {
             TField* field = tableDs->Fields->FieldByNumber(j);
             // Задаем формат столбцов в таблице Excel
             String sCellFormat;
-
-            //data_head.PutElement(field->DisplayName.c_str(), 1, j);
-            data_head.PutElement(Variant(field->DisplayName), 1, j);  // 2017-09-14
-            //data_head.PutElement(Variant(field->Index), 1, j);
-
 
             switch (field->DataType) {  // Нужно тестирование и доработка (добавить форматы и тд.)
             case ftString:
@@ -594,43 +590,51 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 
             TExcelField ef;
 
-            ef.name = field->DisplayName;
+            ef.fieldName = field->DisplayName;
+            ef.descr = field->DisplayName;
             ef.format = sCellFormat;
             excelExportParams->Fields.push_back(ef);
+
+            //data_head.PutElement(field->DisplayName.c_str(), 1, j);
+            //data_head.PutElement(Variant(field->DisplayName), 1, j);  // 2017-09-14
+            //data_head.PutElement(Variant(field->Index), 1, j);
+
         }
-        ExcelFieldCount = excelExportParams->Fields.size();    // Обновляем кол-во полей параметров экспорта
+        //ExcelFieldCount = excelExportParams->Fields.size();    // Обновляем кол-во полей параметров экспорта
     }
 
 
+    int fieldCount = excelExportParams->Fields.size();
+    Variant data_head;
+
     try      // Определение списка полей, формирование шапки таблицы, определение типа данных
     {
-        data_head = vartools::CreateVariantArray(1, ExcelFieldCount);            // Шапка таблицы
+        data_head = vartools::CreateVariantArray(1, fieldCount);            // Шапка таблицы
 
         TCellFormat cf_tablehead_tmp;   // Временный объект для форматирования ячейки шапки таблицы
         TCellFormat cf_tablebody_tmp;   // Временный объект для форматирования ячейки тела таблицы
 
 
-        for (unsigned int j = 0; j < ExcelFieldCount; j++)
+        int j = 1;
+        for (TExcelFieldList::iterator it = excelExportParams->Fields.begin(); it != excelExportParams->Fields.end(); it++, j++)
         {
-            data_head.PutElement(excelExportParams->Fields[j].name.c_str(), 1, j+1);
+            data_head.PutElement(Variant(it->descr), 1, j);
 
             cf_tablehead_tmp.BorderStyle = TCellFormat::xlContinuous;
             cf_tablehead_tmp.FontStyle = cf_tablehead_tmp.FontStyle << TCellFormat::fsBold;
-            cf_tablehead_tmp.Width = excelExportParams->Fields[j].width;
-            cf_tablehead.push_back(cf_tablehead_tmp);
-            cf_tablehead_tmp.bWrapText = excelExportParams->Fields[j].bwraptext_head;
+            cf_tablehead_tmp.Width = it->width;
+            cf_tablehead_tmp.bWrapText = it->bwraptext_head;
 
 
             //cf_tablebody_tmp.DataFormat = excelExportParams->Fields[j].format;
-            cf_tablebody_tmp.DataFormat = excelExportParams->Fields[j].format;
-            cf_tablebody_tmp.bWrapText = excelExportParams->Fields[j].bwraptext_body;
+            cf_tablebody_tmp.DataFormat = it->format;
+            cf_tablebody_tmp.bWrapText = it->bwraptext_body;
             cf_tablebody_tmp.BorderStyle = TCellFormat::xlContinuous;
 
 
+            // Добавляем в список
+            cf_tablehead.push_back(cf_tablehead_tmp);
             cf_tablebody.push_back(cf_tablebody_tmp);
-
-            //String t1 = excelExportParams->Fields[j].format;
-            //String t2 = excelExportParams->Fields[j].name;
         }
     }
     catch (Exception &e)
@@ -671,7 +675,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
     int currentRowNumber = 3;
     if ( !VarIsEmpty(excelExportParams->findTableVtArray("report_parameters")) )  // Если есть данные для раздела report_parameters
     {
-        Variant range_parameters = msexcel.GetRange(Worksheet1, 3, 1, 1, FieldCount);
+        Variant range_parameters = msexcel.GetRange(Worksheet1, 3, 1, 1, fieldCount);
         msexcel.AddName(Workbook, "report_parameters", range_parameters);
         TCellFormat cf_parameters;   // Временный объект для форматирования ячейки тела таблицы
         cf_parameters.bSetFontColor = true;
@@ -683,21 +687,55 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
 
 
     // Шапка таблицы
-    Variant range_tablehead = msexcel.GetRange(Worksheet1, currentRowNumber++, 1, 1, FieldCount);
+    Variant range_tablehead = msexcel.GetRange(Worksheet1, currentRowNumber++, 1, 1, fieldCount);
     msexcel.AddName(Workbook, "table_head", range_tablehead);
     msexcel.WriteTableToRange(range_tablehead, data_head, 1, 1, false);
     //Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
      msexcel.SetRangeColumnsFormat(range_tablehead, cf_tablehead);
 
-    Variant range_tablebody = msexcel.GetRange(Worksheet1, currentRowNumber, 1, 1, FieldCount);
+    Variant range_tablebody = msexcel.GetRange(Worksheet1, currentRowNumber, 1, 1, fieldCount);
 
     msexcel.AddName(Workbook,"table_body", range_tablebody);
     //msexcel.SetRangeColumnsFormat(range_tablebody, df_body);
     msexcel.SetRangeColumnsFormat(range_tablebody, cf_tablebody);
 
 
+    
+    int j = 1;
+    for ( TExcelFieldList::iterator it = excelExportParams->Fields.begin(); it != excelExportParams->Fields.end(); it++, j++)
+    {
+        //data_head.PutElement(Variant(it->descr), 1, j++);
+        Variant cell = msexcel.GetRangeFromRange(range_tablebody, 1, j, 1, 1);
+        try
+        {
+            // этот вариант мне не нравится 2017-11-03 msexcel.AddName(Workbook, Variant("table_column_" + Nvl(it->fieldName, "unknown_" + IntToStr(j)) ) , cell);  // 2017-09-11
+            if (it->fieldName != "")
+            {
+                msexcel.AddName(Workbook, Variant("table_column_" + it->fieldName), cell);  // 2017-09-11
+            }
+            else
+            {
+                msexcel.AddName(Workbook, Variant("table_unassigned_column_" + IntToStr(j)), cell);  // 2017-09-11
+            }
+
+        }
+        catch (Exception &e)
+        {
+            //throw Exception("test " + field->DisplayName + " " + IntToStr(field->Index) + " " + field->DisplayLabel + " " + field->FullName);
+            VarClear(data_head);
+            msexcel.CloseWorkbook(Workbook);
+            msexcel.CloseApplication();
+            throw Exception("Ошибка при создании шаблона. Использовано недопустимое имя для ячейки таблицы \"" + it->fieldName + "\"");
+        }
+
+
+    }
+
+
+
+    ////////////////////////////// tableDataset
     // Имена ячеек для вывода таблицы
-    for (int i = 1; i <= FieldCount; i++)
+/*    for (int i = 1; i <= fieldCount; i++)
     {
         TField* field = tableDs->Fields->FieldByNumber(i);
         Variant cell = msexcel.GetRangeFromRange(range_tablebody, 1, i, 1, 1);
@@ -713,7 +751,7 @@ Variant __fastcall TDocumentWriter::CreateExcelTemplate(TExcelExportParams* exce
             msexcel.CloseApplication();
             throw Exception("Ошибка при создании шаблона. Использовано недопустимое имя для ячейки таблицы \"" + field->DisplayName + "\"");
         }
-    }
+    }  */
 
 
     // Таблица для текста запроса
